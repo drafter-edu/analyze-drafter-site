@@ -32,7 +32,7 @@ def read_requirements(path):
 setup(
     name="analyze_drafter_site",
     version=read("analyze_drafter_site", "VERSION"),
-    description="Awesome analyze_drafter_site created by drafter-edu",
+    description="A python tool for analyzing and summarizing a Drafter website in various ways, to simplify grading",
     url="https://github.com/drafter-edu/analyze-drafter-site/",
     long_description=read("README.md"),
     long_description_content_type="text/markdown",

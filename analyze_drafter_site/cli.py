@@ -1,29 +1,24 @@
-"""CLI interface for analyze_drafter_site project.
+"""CLI interface for analyze_drafter_site
 
-Be creative! do whatever you want!
+This module provides a CLI interface for analyzing Drafter websites.
 
-- Install click or typer and create a CLI app
-- Use builtin argparse
-- Start a web application
-- Import things from your .base module
+First parameter is the path to the Python file to analyze.
 """
 import click
+from analyze_drafter_site import Analyzer
 
 
-def main():  # pragma: no cover
-    """
-    The main function executes on commands:
-    `python -m analyze_drafter_site` and `$ analyze_drafter_site `.
+@click.command()
+@click.argument('path', type=click.Path(exists=True))
+def main(path):
+    """Analyze a Drafter website."""
+    with open(path) as f:
+        code = f.read()
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+    for result in analyzer.save_as_string():
+        print(result)
 
-    This is your program's entry point.
 
-    You can change this function to do whatever you want.
-    Examples:
-        * Run a test suite
-        * Run a server
-        * Do some other stuff
-        * Run a command line application (Click, Typer, ArgParse)
-        * List all available tasks
-        * Run an application (Flask, FastAPI, Django, etc.)
-    """
-    print("This will do something")
+if __name__ == '__main__':
+    main()

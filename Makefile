@@ -9,7 +9,6 @@ help:             ## Show the help.
 	@echo "Targets:"
 	@fgrep "##" Makefile | fgrep -v fgrep
 
-
 .PHONY: show
 show:             ## Show the current environment.
 	@echo "Current environment:"

@@ -2,14 +2,37 @@ import ast
 from collections import defaultdict
 
 # Global variable of known component names
-COMPONENTS = ['Argument', 'Box', 'BulletedList', 'Button', 'CheckBox',
-              'Div', 'Division', 'Download', 'FileUpload', 'Header',
-              'HorizontalRule', 'Image', 'LineBreak', 'Link',
-              'MatPlotLibPlot', 'NumberedList', 'PageContent',
-              'Pre', 'PreformattedText', 'Row', 'SelectBox', 'Span',
-              'SubmitButton',
-              'Table', 'Text', 'TextArea', 'TextBox']
+COMPONENTS = [
+    "Argument",
+    "Box",
+    "BulletedList",
+    "Button",
+    "CheckBox",
+    "Div",
+    "Division",
+    "Download",
+    "FileUpload",
+    "Header",
+    "HorizontalRule",
+    "Image",
+    "LineBreak",
+    "Link",
+    "MatPlotLibPlot",
+    "NumberedList",
+    "PageContent",
+    "Pre",
+    "PreformattedText",
+    "Row",
+    "SelectBox",
+    "Span",
+    "SubmitButton",
+    "Table",
+    "Text",
+    "TextArea",
+    "TextBox",
+]
 LINKING_COMPONENT_NAMES = ["Link", "Button", "SubmitButton"]
+
 
 class ClassInfo:
     def __init__(self, name, fields, base_classes):
@@ -18,14 +41,24 @@ class ClassInfo:
         self.base_classes = base_classes
         self.dependencies = set()
 
+
 class RouteInfo:
-    def __init__(self, name, signature, components, fields_used, function_calls, unknown_relationships):
+    def __init__(
+        self,
+        name,
+        signature,
+        components,
+        fields_used,
+        function_calls,
+        unknown_relationships,
+    ):
         self.name = name
         self.signature = signature
         self.components = components
         self.fields_used = fields_used
         self.function_calls = function_calls
         self.unknown_relationships = unknown_relationships
+
 
 class Analyzer(ast.NodeVisitor):
     def __init__(self):
@@ -37,17 +70,19 @@ class Analyzer(ast.NodeVisitor):
         self.class_dependencies = defaultdict(set)
         self.function_calls = defaultdict(set)
         self.components_used = defaultdict(int)
-    
+
     def visit_ClassDef(self, node):
         """Handle class definitions."""
         is_dataclass = False
         for decorator in node.decorator_list:
-            if isinstance(decorator, ast.Name) and decorator.id == 'dataclass':
+            if isinstance(decorator, ast.Name) and decorator.id == "dataclass":
                 is_dataclass = True
 
         if is_dataclass:
             fields = self.get_dataclass_fields(node)
-            base_classes = [base.id for base in node.bases if isinstance(base, ast.Name)]
+            base_classes = [
+                base.id for base in node.bases if isinstance(base, ast.Name)
+            ]
             class_info = ClassInfo(node.name, fields, base_classes)
             self.dataclasses[node.name] = class_info
 
@@ -57,17 +92,21 @@ class Analyzer(ast.NodeVisitor):
         """Extract the fields of a dataclass."""
         fields = {}
         for statement in node.body:
-            if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+            if isinstance(statement, ast.AnnAssign) and isinstance(
+                statement.target, ast.Name
+            ):
                 field_name = statement.target.id
                 fields[field_name] = statement.annotation
         return fields
-    
+
     def visit_FunctionDef(self, node):
         """Handle function definitions with @route decorator."""
         for decorator in node.decorator_list:
-            if isinstance(decorator, ast.Name) and decorator.id == 'route':
+            if isinstance(decorator, ast.Name) and decorator.id == "route":
                 signature = self.get_function_signature(node)
-                self.current_route = RouteInfo(node.name, signature, defaultdict(int), set(), set(), [])
+                self.current_route = RouteInfo(
+                    node.name, signature, defaultdict(int), set(), set(), []
+                )
                 self.routes.append(self.current_route)
                 self.visit_FunctionBody(node)
                 self.current_route = None
@@ -87,13 +126,20 @@ class Analyzer(ast.NodeVisitor):
         if func_name in COMPONENTS:
             self.components_used[func_name] += 1
         elif func_name in self.function_calls:
+            if self.current_route is None:
+                return
             self.function_calls[self.current_route.name].add(func_name)
         else:
             self.unknown_relationships.append(ast.dump(node))
 
     def handle_attribute_use(self, node):
         """Handle attribute references to dataclass fields."""
-        if isinstance(node.value, ast.Name) and node.attr in self.dataclasses.get(node.value.id, {}).fields:
+        if (
+            isinstance(node.value, ast.Name)
+            and node.attr in self.dataclasses.get(node.value.id, {}).fields
+        ):
+            if self.current_route is None:
+                return
             self.current_route.fields_used.add(node.attr)
 
     def get_function_name(self, node):
@@ -138,13 +184,13 @@ class Analyzer(ast.NodeVisitor):
 
     def save_results(self):
         """Save the results to files."""
-        with open('dataclasses.txt', 'w') as f:
+        with open("dataclasses.txt", "w") as f:
             for class_info in self.dataclasses.values():
                 f.write(f"{class_info.name}\n")
                 for field in class_info.fields:
                     f.write(f"  {field}\n")
 
-        with open('routes.txt', 'w') as f:
+        with open("routes.txt", "w") as f:
             for route_info in self.routes:
                 f.write(f"{route_info.name} {route_info.signature}\n")
                 for component, count in route_info.components.items():
@@ -156,12 +202,12 @@ class Analyzer(ast.NodeVisitor):
                 for unknown in route_info.unknown_relationships:
                     f.write(f"  unknown relationship: {unknown}\n")
 
-        with open('class_diagram.mmd', 'w') as f:
+        with open("class_diagram.mmd", "w") as f:
             f.write(self.generate_mermaid_class_diagram())
 
-        with open('function_diagram.mmd', 'w') as f:
+        with open("function_diagram.mmd", "w") as f:
             f.write(self.generate_mermaid_function_diagram())
-            
+
     def save_as_string(self):
         """Save the results to strings."""
         dataclasses = "Dataclasses:\n"
@@ -184,6 +230,5 @@ class Analyzer(ast.NodeVisitor):
 
         class_diagram = self.generate_mermaid_class_diagram()
         function_diagram = self.generate_mermaid_function_diagram()
-        
-        return dataclasses, routes, class_diagram, function_diagram
 
+        return dataclasses, routes, class_diagram, function_diagram

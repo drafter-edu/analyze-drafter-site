@@ -130,9 +130,7 @@ class Analyzer(ast.NodeVisitor):
                 slice_type = annotation.slice.id
                 return f"{base}[{slice_type}]"
             elif isinstance(annotation.slice, ast.Tuple):
-                slice_types = [
-                    self.get_type_name(elt) for elt in annotation.slice.elts
-                ]
+                slice_types = [self.get_type_name(elt) for elt in annotation.slice.elts]
                 return f"{base}[{', '.join(slice_types)}]"
             else:
                 return base
@@ -143,9 +141,7 @@ class Analyzer(ast.NodeVisitor):
             return f"{self.get_type_name(annotation.value)}.{annotation.attr}"
         else:
             return (
-                ast.unparse(annotation)
-                if hasattr(ast, "unparse")
-                else str(annotation)
+                ast.unparse(annotation) if hasattr(ast, "unparse") else str(annotation)
             )
 
     def visit_FunctionDef(self, node):
@@ -209,9 +205,7 @@ class Analyzer(ast.NodeVisitor):
 
                     if target_name:
                         self.current_route.function_calls.add(target_name)
-                        self.function_calls[self.current_route.name].add(
-                            target_name
-                        )
+                        self.function_calls[self.current_route.name].add(target_name)
         else:
             # Track function calls
             if func_name and self.current_route:
@@ -239,9 +233,7 @@ class Analyzer(ast.NodeVisitor):
         """
         if isinstance(node.value, ast.Name):
             # Check if this is accessing a field on a typed object
-            if isinstance(node.ctx, ast.Load) or isinstance(
-                node.ctx, ast.Store
-            ):
+            if isinstance(node.ctx, ast.Load) or isinstance(node.ctx, ast.Store):
                 if self.current_route:
                     self.current_route.fields_used.add(node.attr)
 
@@ -261,9 +253,7 @@ class Analyzer(ast.NodeVisitor):
         # Handle nested attribute access (e.g., b.a.field1)
         elif isinstance(node.value, ast.Attribute):
             # Continue to track the attribute name
-            if isinstance(node.ctx, ast.Load) or isinstance(
-                node.ctx, ast.Store
-            ):
+            if isinstance(node.ctx, ast.Load) or isinstance(node.ctx, ast.Store):
                 if self.current_route:
                     self.current_route.fields_used.add(node.attr)
 
@@ -310,9 +300,7 @@ class Analyzer(ast.NodeVisitor):
                 # Look up the field type
                 field_name = attr_node.attr
                 if field_name in self.dataclasses[base_type].fields:
-                    field_type_node = self.dataclasses[base_type].fields[
-                        field_name
-                    ]
+                    field_type_node = self.dataclasses[base_type].fields[field_name]
                     field_type = self.get_type_name(field_type_node)
                     # Extract base type (handle list[X], etc.)
                     field_type_base = field_type.split("[")[0]
@@ -326,9 +314,9 @@ class Analyzer(ast.NodeVisitor):
                 # Then get the type of the field 'a' in that type
                 field_name = attr_node.attr
                 if field_name in self.dataclasses[intermediate_type].fields:
-                    field_type_node = self.dataclasses[
-                        intermediate_type
-                    ].fields[field_name]
+                    field_type_node = self.dataclasses[intermediate_type].fields[
+                        field_name
+                    ]
                     field_type = self.get_type_name(field_type_node)
                     field_type_base = field_type.split("[")[0]
                     if field_type_base in self.dataclasses:
@@ -357,7 +345,10 @@ class Analyzer(ast.NodeVisitor):
         """
         # Write code to a temporary file
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
+            mode="w",
+            suffix=".py",
+            delete=False,
+            encoding="utf-8",
         ) as f:
             f.write(code)
             temp_file = f.name
@@ -410,9 +401,7 @@ class Analyzer(ast.NodeVisitor):
                 if type_name:
                     # Store the mapping for this function's scope
                     # We'll use function_name.var_name as key
-                    self.variable_types[f"{func_def.name}.{var.name}"] = (
-                        type_name
-                    )
+                    self.variable_types[f"{func_def.name}.{var.name}"] = type_name
 
     def _get_type_name_from_mypy(self, mypy_type):
         """Extract the dataclass name from a mypy type.
@@ -494,9 +483,7 @@ class Analyzer(ast.NodeVisitor):
                     dependencies.add(inner)
                 elif "[" in inner:
                     # Handle nested generics (basic support)
-                    self._extract_type_references(
-                        inner, owner_class, dependencies
-                    )
+                    self._extract_type_references(inner, owner_class, dependencies)
 
     def _calculate_field_complexity(self, type_name):
         """Calculate complexity score for a single field type.
@@ -552,9 +539,7 @@ class Analyzer(ast.NodeVisitor):
             for field_name, field_type in class_info.fields.items():
                 type_name = self.get_type_name(field_type)
                 usage_count = self.attribute_usage[class_name][field_name]
-                field_complexity = self._calculate_field_complexity(
-                    type_name
-                )
+                field_complexity = self._calculate_field_complexity(type_name)
 
                 output.append(
                     f"{class_name},{field_name},{type_name},"
@@ -602,9 +587,7 @@ class Analyzer(ast.NodeVisitor):
                 unused_dataclasses.append(class_name)
 
         if unused_dataclasses:
-            output.append(
-                "WARNING: The following dataclasses are NOT used anywhere:"
-            )
+            output.append("WARNING: The following dataclasses are NOT used anywhere:")
             for dc in unused_dataclasses:
                 output.append(f"  {dc}")
 
@@ -618,9 +601,7 @@ class Analyzer(ast.NodeVisitor):
         if unused_attributes:
             if output:
                 output.append("")  # Add blank line between warnings
-            output.append(
-                "WARNING: The following attributes are NOT used anywhere:"
-            )
+            output.append("WARNING: The following attributes are NOT used anywhere:")
             for attr in unused_attributes:
                 output.append(f"  {attr}")
 
@@ -718,9 +699,7 @@ class Analyzer(ast.NodeVisitor):
 
         # Report unused dataclasses (textual section)
         if unused_dataclasses:
-            output.append(
-                "WARNING: The following dataclasses are NOT used anywhere:"
-            )
+            output.append("WARNING: The following dataclasses are NOT used anywhere:")
             for dc in unused_dataclasses:
                 output.append(f"  {dc}")
             output.append("-" * 80)
@@ -733,9 +712,7 @@ class Analyzer(ast.NodeVisitor):
                     unused_attributes.append(f"{class_name}.{field_name}")
 
         if unused_attributes:
-            output.append(
-                "WARNING: The following attributes are NOT used anywhere:"
-            )
+            output.append("WARNING: The following attributes are NOT used anywhere:")
             for attr in unused_attributes:
                 output.append(f"  {attr}")
             output.append("-" * 80)

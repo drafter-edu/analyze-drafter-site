@@ -5,4 +5,3 @@
 # You can also run `make switch-to-poetry` to use the poetry package manager.
 click
 drafter
-tabulate

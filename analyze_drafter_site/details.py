@@ -1,6 +1,5 @@
 import ast
 from collections import defaultdict
-from tabulate import tabulate
 
 # Global variable of known component names
 COMPONENTS = [
@@ -338,9 +337,6 @@ class Analyzer(ast.NodeVisitor):
             return "No dataclasses found.\n"
 
         output = []
-        output.append("\n" + "=" * 80)
-        output.append("DATACLASS ANALYSIS")
-        output.append("=" * 80)
 
         # Build table data
         table_data = []
@@ -379,19 +375,30 @@ class Analyzer(ast.NodeVisitor):
                     ]
                 )
 
-        # Generate table
-        headers = ["Dataclass", "Attribute", "Type", "Usage Count", "Complexity"]
-        output.append("\n" + tabulate(table_data, headers=headers, tablefmt="grid"))
+        # Generate CSV-style table with header
+        output.append("Dataclass,Attribute,Type,Usage Count,Complexity")
+        for row in table_data:
+            output.append(",".join(str(x) for x in row))
 
-        # Report unused dataclasses
+        output.append("-" * 80)
+
+        # Complexity scores table - also CSV format
+        output.append("Dataclass,Complexity")
+        for class_name in self.dataclasses.keys():
+            complexity = self._calculate_dataclass_complexity(class_name)
+            output.append(f"{class_name},{complexity:.1f}")
+        output.append(f"TOTAL,{total_complexity:.1f}")
+
+        output.append("-" * 80)
+
+        # Report unused dataclasses (textual section)
         if unused_dataclasses:
-            output.append("\n" + "!" * 80)
             output.append("WARNING: The following dataclasses are NOT used anywhere:")
             for dc in unused_dataclasses:
-                output.append(f"  - {dc}")
-            output.append("!" * 80)
+                output.append(f"  {dc}")
+            output.append("-" * 80)
 
-        # Report unused attributes
+        # Report unused attributes (textual section)
         unused_attributes = []
         for class_name, class_info in self.dataclasses.items():
             for field_name in class_info.fields.keys():
@@ -399,22 +406,10 @@ class Analyzer(ast.NodeVisitor):
                     unused_attributes.append(f"{class_name}.{field_name}")
 
         if unused_attributes:
-            output.append("\n" + "!" * 80)
             output.append("WARNING: The following attributes are NOT used anywhere:")
             for attr in unused_attributes:
-                output.append(f"  - {attr}")
-            output.append("!" * 80)
-
-        # Report complexity scores
-        output.append("\n" + "-" * 80)
-        output.append("COMPLEXITY SCORES BY DATACLASS:")
-        output.append("-" * 80)
-        for class_name in self.dataclasses.keys():
-            complexity = self._calculate_dataclass_complexity(class_name)
-            output.append(f"  {class_name}: {complexity:.1f}")
-        output.append("-" * 80)
-        output.append(f"  TOTAL COMPLEXITY: {total_complexity:.1f}")
-        output.append("-" * 80)
+                output.append(f"  {attr}")
+            output.append("-" * 80)
 
         return "\n".join(output)
 

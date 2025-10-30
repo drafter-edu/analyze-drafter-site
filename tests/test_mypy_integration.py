@@ -4,8 +4,9 @@ from analyze_drafter_site import Analyzer
 
 
 def test_mypy_disambiguates_same_field_names():
-    """Test that mypy correctly distinguishes between dataclasses with same field names.
-    
+    """Test mypy correctly distinguishes between dataclasses with same
+    field names.
+
     This is the main improvement over the old AST-only approach.
     """
     code = """
@@ -34,12 +35,12 @@ def page_b(state: StateB):
 """
     analyzer = Analyzer()
     analyzer.analyze(code)
-    
+
     # StateA.count should be used exactly once
     assert analyzer.attribute_usage["StateA"]["count"] == 1
     # StateA.name should not be used
     assert analyzer.attribute_usage["StateA"]["name"] == 0
-    
+
     # StateB.count should NOT be counted (never accessed)
     assert analyzer.attribute_usage["StateB"]["count"] == 0
     # StateB.age should be used exactly once
@@ -69,7 +70,7 @@ def page(b: B):
 """
     analyzer = Analyzer()
     analyzer.analyze(code)
-    
+
     # B.a should be accessed
     assert analyzer.attribute_usage["B"]["a"] >= 1
     # A.field1 should be accessed
@@ -82,7 +83,7 @@ def page(b: B):
 
 def test_mypy_fallback_when_type_unknown():
     """Test that the system falls back to old behavior when type is unknown.
-    
+
     This ensures backwards compatibility when mypy can't determine the type.
     """
     code = """
@@ -105,7 +106,7 @@ def page(state: State):
 """
     analyzer = Analyzer()
     analyzer.analyze(code)
-    
+
     # State.count should still be tracked
     # It will be counted at least once from the route
     assert analyzer.attribute_usage["State"]["count"] >= 1
@@ -133,7 +134,7 @@ def page(state_a: StateA, state_b: StateB):
 """
     analyzer = Analyzer()
     analyzer.analyze(code)
-    
+
     # Each state's field should be tracked independently
     assert analyzer.attribute_usage["StateA"]["x"] == 1
     assert analyzer.attribute_usage["StateB"]["y"] == 1
@@ -159,7 +160,7 @@ def page_b(data: State):
 """
     analyzer = Analyzer()
     analyzer.analyze(code)
-    
+
     # Check that variable types were extracted
     assert "page_a.state" in analyzer.variable_types
     assert analyzer.variable_types["page_a.state"] == "State"
@@ -184,7 +185,7 @@ def page(state: State, name: str, value: int):
 """
     analyzer = Analyzer()
     analyzer.analyze(code)
-    
+
     # Only State should be tracked
     assert "page.state" in analyzer.variable_types
     assert analyzer.variable_types["page.state"] == "State"
@@ -212,7 +213,7 @@ def page(state: Optional[State]):
 """
     analyzer = Analyzer()
     analyzer.analyze(code)
-    
+
     # Mypy should still extract State from Optional[State]
     assert "page.state" in analyzer.variable_types
     assert analyzer.variable_types["page.state"] == "State"

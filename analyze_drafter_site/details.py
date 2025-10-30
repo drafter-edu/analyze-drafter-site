@@ -1,5 +1,6 @@
 import ast
 from collections import defaultdict
+from tabulate import tabulate
 
 # Global variable of known component names
 COMPONENTS = [
@@ -70,6 +71,8 @@ class Analyzer(ast.NodeVisitor):
         self.class_dependencies = defaultdict(set)
         self.function_calls = defaultdict(set)
         self.components_used = defaultdict(int)
+        # Track attribute usage: {class_name: {field_name: count}}
+        self.attribute_usage = defaultdict(lambda: defaultdict(int))
 
     def visit_ClassDef(self, node):
         """Handle class definitions."""
@@ -112,9 +115,7 @@ class Analyzer(ast.NodeVisitor):
                 slice_type = annotation.slice.id
                 return f"{base}[{slice_type}]"
             elif isinstance(annotation.slice, ast.Tuple):
-                slice_types = [
-                    self.get_type_name(elt) for elt in annotation.slice.elts
-                ]
+                slice_types = [self.get_type_name(elt) for elt in annotation.slice.elts]
                 return f"{base}[{', '.join(slice_types)}]"
             else:
                 return base
@@ -125,9 +126,7 @@ class Analyzer(ast.NodeVisitor):
             return f"{self.get_type_name(annotation.value)}.{annotation.attr}"
         else:
             return (
-                ast.unparse(annotation)
-                if hasattr(ast, "unparse")
-                else str(annotation)
+                ast.unparse(annotation) if hasattr(ast, "unparse") else str(annotation)
             )
 
     def visit_FunctionDef(self, node):
@@ -185,9 +184,7 @@ class Analyzer(ast.NodeVisitor):
 
                     if target_name:
                         self.current_route.function_calls.add(target_name)
-                        self.function_calls[self.current_route.name].add(
-                            target_name
-                        )
+                        self.function_calls[self.current_route.name].add(target_name)
         else:
             # Track function calls
             if func_name and self.current_route:
@@ -208,13 +205,27 @@ class Analyzer(ast.NodeVisitor):
 
     def visit_Attribute(self, node):
         """Handle attribute references to dataclass fields."""
-        if isinstance(node.value, ast.Name) and self.current_route:
+        if isinstance(node.value, ast.Name):
             # Check if this is accessing a field on a state object
             # We'll track any attribute access for now
-            if isinstance(node.ctx, ast.Load) or isinstance(
-                node.ctx, ast.Store
-            ):
-                self.current_route.fields_used.add(node.attr)
+            if isinstance(node.ctx, ast.Load) or isinstance(node.ctx, ast.Store):
+                if self.current_route:
+                    self.current_route.fields_used.add(node.attr)
+                # Track which dataclass this attribute might belong to
+                # We'll match it later in the analysis
+                for class_name, class_info in self.dataclasses.items():
+                    if node.attr in class_info.fields:
+                        self.attribute_usage[class_name][node.attr] += 1
+        # Handle nested attribute access (e.g., b.a.field1)
+        elif isinstance(node.value, ast.Attribute):
+            # Continue to track the attribute name
+            if isinstance(node.ctx, ast.Load) or isinstance(node.ctx, ast.Store):
+                if self.current_route:
+                    self.current_route.fields_used.add(node.attr)
+                # Match the attribute to dataclasses
+                for class_name, class_info in self.dataclasses.items():
+                    if node.attr in class_info.fields:
+                        self.attribute_usage[class_name][node.attr] += 1
         self.generic_visit(node)
 
     def get_function_name(self, node):
@@ -260,9 +271,7 @@ class Analyzer(ast.NodeVisitor):
 
         # Handle subscripted types like list[C] or dict[str, C]
         if "[" in type_name and "]" in type_name:
-            inner_type = type_name[
-                type_name.index("[") + 1: type_name.rindex("]")
-            ]
+            inner_type = type_name[type_name.index("[") + 1 : type_name.rindex("]")]
             # Split by comma to handle types like dict[str, int]
             for inner in inner_type.split(","):
                 inner = inner.strip()
@@ -271,9 +280,134 @@ class Analyzer(ast.NodeVisitor):
                     dependencies.add(inner)
                 elif "[" in inner:
                     # Handle nested generics (basic support)
-                    self._extract_type_references(
-                        inner, owner_class, dependencies
-                    )
+                    self._extract_type_references(inner, owner_class, dependencies)
+
+    def _calculate_field_complexity(self, type_name):
+        """Calculate complexity score for a single field type.
+
+        Complexity scoring:
+        - Primitives (int, str, bool, float): 0.1
+        - Lists: 1
+        - Custom dataclasses: 1
+        - Dicts, tuples, sets: 10
+        - Any other: 100
+        """
+        # Handle subscripted types like list[X], dict[X, Y]
+        base_type = type_name.split("[")[0].lower()
+
+        # Check for primitives
+        if base_type in ["int", "str", "bool", "float"]:
+            return 0.1
+
+        # Check for lists
+        if base_type == "list":
+            return 1
+
+        # Check for custom dataclasses
+        if type_name.split("[")[0] in self.dataclasses:
+            return 1
+
+        # Check for dict, tuple, set
+        if base_type in ["dict", "tuple", "set"]:
+            return 10
+
+        # Any other type
+        return 100
+
+    def _calculate_dataclass_complexity(self, class_name):
+        """Calculate total complexity score for a dataclass."""
+        class_info = self.dataclasses[class_name]
+        total_score = 0.0
+        for field_type in class_info.fields.values():
+            type_name = self.get_type_name(field_type)
+            total_score += self._calculate_field_complexity(type_name)
+        return total_score
+
+    def generate_dataclass_analysis(self):
+        """Generate detailed analysis of dataclasses with usage and complexity."""
+        if not self.dataclasses:
+            return "No dataclasses found.\n"
+
+        output = []
+        output.append("\n" + "=" * 80)
+        output.append("DATACLASS ANALYSIS")
+        output.append("=" * 80)
+
+        # Build table data
+        table_data = []
+        total_complexity = 0.0
+        unused_dataclasses = []
+
+        for class_name, class_info in self.dataclasses.items():
+            # Check if dataclass is used at all
+            class_used = (
+                any(
+                    class_name in info.dependencies
+                    for info in self.dataclasses.values()
+                )
+                or sum(self.attribute_usage[class_name].values()) > 0
+            )
+
+            if not class_used:
+                unused_dataclasses.append(class_name)
+
+            complexity_score = self._calculate_dataclass_complexity(class_name)
+            total_complexity += complexity_score
+
+            # List all attributes with their types and usage counts
+            for field_name, field_type in class_info.fields.items():
+                type_name = self.get_type_name(field_type)
+                usage_count = self.attribute_usage[class_name][field_name]
+                field_complexity = self._calculate_field_complexity(type_name)
+
+                table_data.append(
+                    [
+                        class_name,
+                        field_name,
+                        type_name,
+                        usage_count,
+                        f"{field_complexity:.1f}",
+                    ]
+                )
+
+        # Generate table
+        headers = ["Dataclass", "Attribute", "Type", "Usage Count", "Complexity"]
+        output.append("\n" + tabulate(table_data, headers=headers, tablefmt="grid"))
+
+        # Report unused dataclasses
+        if unused_dataclasses:
+            output.append("\n" + "!" * 80)
+            output.append("WARNING: The following dataclasses are NOT used anywhere:")
+            for dc in unused_dataclasses:
+                output.append(f"  - {dc}")
+            output.append("!" * 80)
+
+        # Report unused attributes
+        unused_attributes = []
+        for class_name, class_info in self.dataclasses.items():
+            for field_name in class_info.fields.keys():
+                if self.attribute_usage[class_name][field_name] == 0:
+                    unused_attributes.append(f"{class_name}.{field_name}")
+
+        if unused_attributes:
+            output.append("\n" + "!" * 80)
+            output.append("WARNING: The following attributes are NOT used anywhere:")
+            for attr in unused_attributes:
+                output.append(f"  - {attr}")
+            output.append("!" * 80)
+
+        # Report complexity scores
+        output.append("\n" + "-" * 80)
+        output.append("COMPLEXITY SCORES BY DATACLASS:")
+        output.append("-" * 80)
+        for class_name in self.dataclasses.keys():
+            complexity = self._calculate_dataclass_complexity(class_name)
+            output.append(f"  {class_name}: {complexity:.1f}")
+        output.append("-" * 80)
+        output.append(f"  TOTAL COMPLEXITY: {total_complexity:.1f}")
+        output.append("-" * 80)
+
+        return "\n".join(output)
 
     def generate_mermaid_class_diagram(self):
         """Generate Mermaid diagram for class relationships."""
@@ -329,6 +463,10 @@ class Analyzer(ast.NodeVisitor):
 
     def save_as_string(self):
         """Save the results to strings."""
+        # New detailed dataclass analysis
+        dataclass_analysis = self.generate_dataclass_analysis()
+
+        # Old simple format
         dataclasses = "Dataclasses:\n"
         for class_info in self.dataclasses.values():
             dataclasses += f"{class_info.name}\n"
@@ -350,4 +488,4 @@ class Analyzer(ast.NodeVisitor):
         class_diagram = self.generate_mermaid_class_diagram()
         function_diagram = self.generate_mermaid_function_diagram()
 
-        return dataclasses, routes, class_diagram, function_diagram
+        return dataclass_analysis, dataclasses, routes, class_diagram, function_diagram

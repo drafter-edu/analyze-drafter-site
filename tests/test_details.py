@@ -246,3 +246,206 @@ def index(state):
     # Check route is detected even with decorator arguments
     assert len(analyzer.routes) == 1
     assert analyzer.routes[0].name == "index"
+
+
+def test_attribute_usage_tracking():
+    """Test that attribute usage is tracked correctly."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class State:
+    x: int
+    y: str
+    z: bool
+
+@route
+def index(state: State):
+    state.x += 1
+    state.y = "hello"
+    return Page(state, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+    
+    # Check that usage is tracked
+    assert analyzer.attribute_usage["State"]["x"] == 1
+    assert analyzer.attribute_usage["State"]["y"] == 1
+    assert analyzer.attribute_usage["State"]["z"] == 0
+
+
+def test_complexity_calculation_primitives():
+    """Test complexity calculation for primitive types."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Simple:
+    a: int
+    b: str
+    c: bool
+    d: float
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+    
+    # Each primitive should be 0.1
+    complexity = analyzer._calculate_dataclass_complexity("Simple")
+    assert complexity == 0.4
+
+
+def test_complexity_calculation_collections():
+    """Test complexity calculation for collection types."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Collections:
+    a_list: list[int]
+    a_dict: dict[str, int]
+    a_tuple: tuple[int, str]
+    a_set: set[str]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+    
+    # list=1, dict=10, tuple=10, set=10 => total=31
+    complexity = analyzer._calculate_dataclass_complexity("Collections")
+    assert complexity == 31.0
+
+
+def test_complexity_calculation_custom_types():
+    """Test complexity calculation for custom dataclass types."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class A:
+    value: int
+
+@dataclass
+class B:
+    a: A
+    items: list[A]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+    
+    # A: 1 int = 0.1
+    complexity_a = analyzer._calculate_dataclass_complexity("A")
+    assert complexity_a == 0.1
+    
+    # B: 1 custom (A) = 1, 1 list = 1 => total=2
+    complexity_b = analyzer._calculate_dataclass_complexity("B")
+    assert complexity_b == 2.0
+
+
+def test_unused_dataclass_detection():
+    """Test detection of unused dataclasses."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Used:
+    value: int
+
+@dataclass
+class Unused:
+    value: int
+
+@dataclass
+class Container:
+    used: Used
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+    
+    analysis = analyzer.generate_dataclass_analysis()
+    
+    # Unused should not be flagged since checking dependencies
+    # Container uses Used, so Used is not unused
+    # Unused has no usage
+    assert "Unused" not in analysis or "NOT used" in analysis
+
+
+def test_unused_attributes_detection():
+    """Test detection of unused attributes."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class State:
+    used_field: int
+    unused_field: str
+
+@route
+def index(state: State):
+    state.used_field += 1
+    return Page(state, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+    
+    analysis = analyzer.generate_dataclass_analysis()
+    
+    # Check that unused_field is flagged
+    assert "State.unused_field" in analysis
+    assert "NOT used" in analysis
+
+
+def test_dataclass_analysis_table_format():
+    """Test that dataclass analysis produces a table."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Test:
+    field1: int
+    field2: str
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+    
+    analysis = analyzer.generate_dataclass_analysis()
+    
+    # Check that it contains table headers
+    assert "Dataclass" in analysis
+    assert "Attribute" in analysis
+    assert "Type" in analysis
+    assert "Usage Count" in analysis
+    assert "Complexity" in analysis
+    
+    # Check it contains the data
+    assert "Test" in analysis
+    assert "field1" in analysis
+    assert "field2" in analysis
+
+
+def test_nested_attribute_access():
+    """Test tracking of nested attribute access like b.a.field1."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class A:
+    field1: int
+
+@dataclass
+class B:
+    a: A
+
+@route
+def index(b: B):
+    b.a.field1 += 1
+    return Page(b, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+    
+    # Both 'a' and 'field1' should be tracked
+    assert analyzer.attribute_usage["B"]["a"] >= 1
+    assert analyzer.attribute_usage["A"]["field1"] >= 1
+

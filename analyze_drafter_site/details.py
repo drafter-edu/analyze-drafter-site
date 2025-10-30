@@ -331,6 +331,114 @@ class Analyzer(ast.NodeVisitor):
             total_score += self._calculate_field_complexity(type_name)
         return total_score
 
+    def get_dataclass_attribute_csv(self):
+        """Generate CSV table of dataclass attributes with usage and complexity."""
+        if not self.dataclasses:
+            return "No dataclasses found."
+
+        output = []
+        output.append("Dataclass,Attribute,Type,Usage Count,Complexity")
+
+        for class_name, class_info in self.dataclasses.items():
+            for field_name, field_type in class_info.fields.items():
+                type_name = self.get_type_name(field_type)
+                usage_count = self.attribute_usage[class_name][field_name]
+                field_complexity = self._calculate_field_complexity(type_name)
+
+                output.append(
+                    f"{class_name},{field_name},{type_name},{usage_count},{field_complexity:.1f}"
+                )
+
+        return "\n".join(output)
+
+    def get_dataclass_complexity_csv(self):
+        """Generate CSV table of dataclass complexity scores."""
+        if not self.dataclasses:
+            return ""
+
+        output = []
+        output.append("Dataclass,Complexity")
+
+        total_complexity = 0.0
+        for class_name in self.dataclasses.keys():
+            complexity = self._calculate_dataclass_complexity(class_name)
+            total_complexity += complexity
+            output.append(f"{class_name},{complexity:.1f}")
+
+        output.append(f"TOTAL,{total_complexity:.1f}")
+
+        return "\n".join(output)
+
+    def get_unused_warnings(self):
+        """Generate warnings about unused dataclasses and attributes."""
+        if not self.dataclasses:
+            return ""
+
+        output = []
+
+        # Check for unused dataclasses
+        unused_dataclasses = []
+        for class_name, class_info in self.dataclasses.items():
+            class_used = (
+                any(
+                    class_name in info.dependencies
+                    for info in self.dataclasses.values()
+                )
+                or sum(self.attribute_usage[class_name].values()) > 0
+            )
+            if not class_used:
+                unused_dataclasses.append(class_name)
+
+        if unused_dataclasses:
+            output.append("WARNING: The following dataclasses are NOT used anywhere:")
+            for dc in unused_dataclasses:
+                output.append(f"  {dc}")
+
+        # Check for unused attributes
+        unused_attributes = []
+        for class_name, class_info in self.dataclasses.items():
+            for field_name in class_info.fields.keys():
+                if self.attribute_usage[class_name][field_name] == 0:
+                    unused_attributes.append(f"{class_name}.{field_name}")
+
+        if unused_attributes:
+            if output:
+                output.append("")  # Add blank line between warnings
+            output.append("WARNING: The following attributes are NOT used anywhere:")
+            for attr in unused_attributes:
+                output.append(f"  {attr}")
+
+        return "\n".join(output) if output else ""
+
+    def get_textual_details(self):
+        """Generate textual details about dataclasses and routes."""
+        output = []
+
+        # Dataclasses listing
+        if self.dataclasses:
+            output.append("Dataclasses:")
+            for class_info in self.dataclasses.values():
+                output.append(f"{class_info.name}")
+                for field in class_info.fields:
+                    output.append(f"  {field}")
+            output.append("")
+
+        # Routes listing
+        if self.routes:
+            output.append("Routes:")
+            for route_info in self.routes:
+                output.append(f"{route_info.signature}")
+                for component, count in route_info.components.items():
+                    output.append(f"  {component}: {count}")
+                for field in route_info.fields_used:
+                    output.append(f"  {field} used")
+                for func_call in route_info.function_calls:
+                    output.append(f"  calls {func_call}")
+                for unknown in route_info.unknown_relationships:
+                    output.append(f"  unknown relationship: {unknown}")
+
+        return "\n".join(output)
+
     def generate_dataclass_analysis(self):
         """Generate detailed analysis of dataclasses with usage and complexity."""
         if not self.dataclasses:

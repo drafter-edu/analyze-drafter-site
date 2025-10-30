@@ -15,44 +15,62 @@ def main(path):
     """Analyze a Drafter website."""
     with open(path, encoding="utf-8") as f:
         code = f.read()
+
+    # Calculate complexity
     tree, complexity_by_section = calculate_complexity(code)
-    print("\nComplexity Analysis:")
-    categories = sorted(AST_CATEGORY_ORDER, key=lambda x: -x[1])
-    longest_name = (
-        max(len(section["name"]) for section in complexity_by_section)
-        if complexity_by_section
-        else 4
-    )
-    print(
-        "Name".ljust(longest_name),
-        "Start".ljust(6),
-        "End".ljust(6),
-        "Total".rjust(6),
-        "|",
-        *[cat.title() + " " for cat, order in categories],
-        sep="\t"
-    )
-    for section in complexity_by_section:
-        score = section["score"]
-        parts = [
-            str(score["parts"][category]).ljust(1 + len(category))
-            for category, order in categories
-        ]
-        line = [
-            section["name"].ljust(longest_name),
-            str(section["startLine"]).ljust(6),
-            str(section["endLine"]).ljust(6),
-            str(score["total"]).rjust(6),
-            "|",
-        ]
-        line.extend(parts)
-        print("\t".join(str(x) for x in line))
-    print("---" * 20)
-    print("Detailed Analysis:")
+
+    # Analyze details
     analyzer = Analyzer()
     analyzer.analyze(code)
-    for result in analyzer.save_as_string():
-        print(result)
+
+    # ===== CSV DATA SECTION (all tabular/empirical data) =====
+
+    # 1. Complexity Analysis in CSV format
+    print("Name,Start,End,Total,Unusual,Important,Good,Mundane,Drafter")
+    categories = sorted(AST_CATEGORY_ORDER, key=lambda x: -x[1])
+    for section in complexity_by_section:
+        score = section["score"]
+        parts = [str(score["parts"][category]) for category, order in categories]
+        line = [
+            section["name"],
+            str(section["startLine"]),
+            str(section["endLine"]),
+            str(score["total"]),
+        ]
+        line.extend(parts)
+        print(",".join(line))
+
+    print("-" * 80)
+
+    # 2. Dataclass attribute details (CSV)
+    print(analyzer.get_dataclass_attribute_csv())
+
+    print("-" * 80)
+
+    # 3. Dataclass complexity scores (CSV)
+    print(analyzer.get_dataclass_complexity_csv())
+
+    print("-" * 80)
+
+    # ===== TEXTUAL RESULTS SECTION =====
+
+    # 4. Warnings about unused dataclasses/attributes
+    warnings = analyzer.get_unused_warnings()
+    if warnings:
+        print(warnings)
+        print("-" * 80)
+
+    # 5. Other textual details (Routes, Dataclasses list)
+    print(analyzer.get_textual_details())
+
+    print("-" * 80)
+
+    # ===== DIAGRAMS SECTION =====
+
+    # 6. Mermaid diagrams
+    print(analyzer.generate_mermaid_class_diagram())
+    print()
+    print(analyzer.generate_mermaid_function_diagram())
 
 
 if __name__ == "__main__":

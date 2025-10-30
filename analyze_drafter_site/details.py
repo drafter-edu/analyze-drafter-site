@@ -1,4 +1,5 @@
 import ast
+import builtins
 import os
 import tempfile
 from collections import defaultdict
@@ -42,6 +43,18 @@ COMPONENTS = [
     "TextBox",
 ]
 LINKING_COMPONENT_NAMES = ["Link", "Button", "SubmitButton"]
+
+
+def is_builtin_name(name: str) -> bool:
+    """Check if a name is a Python built-in function or type.
+
+    Args:
+        name: The function/type name to check
+
+    Returns:
+        True if the name is a built-in, False otherwise
+    """
+    return name in dir(builtins)
 
 
 class ClassInfo:
@@ -207,8 +220,8 @@ class Analyzer(ast.NodeVisitor):
                         self.current_route.function_calls.add(target_name)
                         self.function_calls[self.current_route.name].add(target_name)
         else:
-            # Track function calls
-            if func_name and self.current_route:
+            # Track function calls (excluding built-ins)
+            if func_name and self.current_route and not is_builtin_name(func_name):
                 self.current_route.function_calls.add(func_name)
                 self.function_calls[self.current_route.name].add(func_name)
 
@@ -219,7 +232,10 @@ class Analyzer(ast.NodeVisitor):
         """Handle return statements that might call other route functions."""
         if node.value and isinstance(node.value, ast.Call):
             func_name = self.get_function_name(node.value)
-            if func_name and self.current_route:
+            # Only track if it's not a built-in, not a component, and is in a route
+            if (func_name and self.current_route and
+                    not is_builtin_name(func_name) and
+                    func_name not in COMPONENTS):
                 self.current_route.function_calls.add(func_name)
                 self.function_calls[self.current_route.name].add(func_name)
         self.generic_visit(node)

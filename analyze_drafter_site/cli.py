@@ -13,7 +13,7 @@ from analyze_drafter_site import Analyzer, calculate_complexity, AST_CATEGORY_OR
 @click.argument("path", type=click.Path(exists=True))
 def main(path):
     """Analyze a Drafter website."""
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         code = f.read()
     tree, complexity_by_section = calculate_complexity(code)
     print("\nComplexity Analysis:")

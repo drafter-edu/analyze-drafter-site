@@ -72,6 +72,9 @@ class Analyzer(ast.NodeVisitor):
         self.function_calls = defaultdict(set)
         self.components_used = defaultdict(int)
         # Track attribute usage: {class_name: {field_name: count}}
+        # Note: Without full type inference, we increment usage for all
+        # dataclasses that have a field with the accessed name. This is
+        # an approximation suitable for educational code analysis.
         self.attribute_usage = defaultdict(lambda: defaultdict(int))
 
     def visit_ClassDef(self, node):
@@ -204,7 +207,12 @@ class Analyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Attribute(self, node):
-        """Handle attribute references to dataclass fields."""
+        """Handle attribute references to dataclass fields.
+
+        Note: Without full type inference, we increment usage for all
+        dataclasses that have a field matching the accessed attribute name.
+        This provides a reasonable approximation for educational code analysis.
+        """
         if isinstance(node.value, ast.Name):
             # Check if this is accessing a field on a state object
             # We'll track any attribute access for now
@@ -212,7 +220,7 @@ class Analyzer(ast.NodeVisitor):
                 if self.current_route:
                     self.current_route.fields_used.add(node.attr)
                 # Track which dataclass this attribute might belong to
-                # We'll match it later in the analysis
+                # Note: This will match ALL dataclasses with this field name
                 for class_name, class_info in self.dataclasses.items():
                     if node.attr in class_info.fields:
                         self.attribute_usage[class_name][node.attr] += 1
@@ -223,6 +231,7 @@ class Analyzer(ast.NodeVisitor):
                 if self.current_route:
                     self.current_route.fields_used.add(node.attr)
                 # Match the attribute to dataclasses
+                # Note: This will match ALL dataclasses with this field name
                 for class_name, class_info in self.dataclasses.items():
                     if node.attr in class_info.fields:
                         self.attribute_usage[class_name][node.attr] += 1

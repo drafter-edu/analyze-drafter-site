@@ -4,7 +4,7 @@ from analyze_drafter_site import Analyzer
 
 
 def test_mypy_disambiguates_same_field_names():
-    """Test mypy correctly distinguishes between dataclasses with same
+    """Test that mypy correctly distinguishes dataclasses with the same
     field names.
 
     This is the main improvement over the old AST-only approach.

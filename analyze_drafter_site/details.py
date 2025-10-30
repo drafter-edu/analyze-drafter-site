@@ -484,7 +484,7 @@ class Analyzer(ast.NodeVisitor):
         if "[" in type_name and "]" in type_name:
             inner_type = type_name[
                 type_name.index("[") + 1 : type_name.rindex("]")  # noqa: E203
-            ]
+            ]  # E203 is a known conflict with Black's slice formatting
             # Split by comma to handle types like dict[str, int]
             for inner in inner_type.split(","):
                 inner = inner.strip()

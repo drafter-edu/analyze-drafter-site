@@ -246,3 +246,500 @@ def index(state):
     # Check route is detected even with decorator arguments
     assert len(analyzer.routes) == 1
     assert analyzer.routes[0].name == "index"
+
+
+def test_attribute_usage_tracking():
+    """Test that attribute usage is tracked correctly."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class State:
+    x: int
+    y: str
+    z: bool
+
+@route
+def index(state: State):
+    state.x += 1
+    state.y = "hello"
+    return Page(state, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # Check that usage is tracked
+    assert analyzer.attribute_usage["State"]["x"] == 1
+    assert analyzer.attribute_usage["State"]["y"] == 1
+    assert analyzer.attribute_usage["State"]["z"] == 0
+
+
+def test_complexity_calculation_primitives():
+    """Test complexity calculation for primitive types."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Simple:
+    a: int
+    b: str
+    c: bool
+    d: float
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # Each primitive should be 0.1
+    complexity = analyzer._calculate_dataclass_complexity("Simple")
+    assert complexity == 0.4
+
+
+def test_complexity_calculation_collections():
+    """Test complexity calculation for collection types."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Collections:
+    a_list: list[int]
+    a_dict: dict[str, int]
+    a_tuple: tuple[int, str]
+    a_set: set[str]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # list=1, dict=10, tuple=10, set=10 => total=31
+    complexity = analyzer._calculate_dataclass_complexity("Collections")
+    assert complexity == 31.0
+
+
+def test_complexity_calculation_custom_types():
+    """Test complexity calculation for custom dataclass types."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class A:
+    value: int
+
+@dataclass
+class B:
+    a: A
+    items: list[A]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # A: 1 int = 0.1
+    complexity_a = analyzer._calculate_dataclass_complexity("A")
+    assert complexity_a == 0.1
+
+    # B: 1 custom (A) = 1, 1 list = 1 => total=2
+    complexity_b = analyzer._calculate_dataclass_complexity("B")
+    assert complexity_b == 2.0
+
+
+def test_unused_dataclass_detection():
+    """Test detection of unused dataclasses."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Used:
+    value: int
+
+@dataclass
+class Unused:
+    value: int
+
+@dataclass
+class Container:
+    used: Used
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    analysis = analyzer.generate_dataclass_analysis()
+
+    # Unused should not be flagged since checking dependencies
+    # Container uses Used, so Used is not unused
+    # Unused has no usage
+    assert "Unused" not in analysis or "NOT used" in analysis
+
+
+def test_unused_attributes_detection():
+    """Test detection of unused attributes."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class State:
+    used_field: int
+    unused_field: str
+
+@route
+def index(state: State):
+    state.used_field += 1
+    return Page(state, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    analysis = analyzer.generate_dataclass_analysis()
+
+    # Check that unused_field is flagged
+    assert "State.unused_field" in analysis
+    assert "NOT used" in analysis
+
+
+def test_dataclass_analysis_table_format():
+    """Test that dataclass analysis produces a table."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Test:
+    field1: int
+    field2: str
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    analysis = analyzer.generate_dataclass_analysis()
+
+    # Check that it contains table headers
+    assert "Dataclass" in analysis
+    assert "Attribute" in analysis
+    assert "Type" in analysis
+    assert "Usage Count" in analysis
+    assert "Complexity" in analysis
+
+    # Check it contains the data
+    assert "Test" in analysis
+    assert "field1" in analysis
+    assert "field2" in analysis
+
+
+def test_nested_attribute_access():
+    """Test tracking of nested attribute access like b.a.field1."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class A:
+    field1: int
+
+@dataclass
+class B:
+    a: A
+
+@route
+def index(b: B):
+    b.a.field1 += 1
+    return Page(b, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # Both 'a' and 'field1' should be tracked
+    assert analyzer.attribute_usage["B"]["a"] >= 1
+    assert analyzer.attribute_usage["A"]["field1"] >= 1
+
+
+def test_csv_attribute_output():
+    """Test that CSV attribute output is properly formatted."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class State:
+    name: str
+    age: int
+    score: float
+
+@route
+def index(state: State):
+    state.name = "Alice"
+    state.age += 1
+    return Page(state, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    csv_output = analyzer.get_dataclass_attribute_csv()
+
+    # Check CSV header
+    assert "Dataclass,Attribute,Type,Usage Count,Complexity" in csv_output
+
+    # Check data rows are present
+    assert "State,name,str,1,0.1" in csv_output
+    assert "State,age,int,1,0.1" in csv_output
+    assert "State,score,float,0,0.1" in csv_output
+
+    # Verify it's comma-separated
+    lines = csv_output.split("\n")
+    assert len(lines) >= 4  # header + 3 data rows
+
+
+def test_csv_complexity_output():
+    """Test that CSV complexity output is properly formatted."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Simple:
+    x: int
+    y: str
+
+@dataclass
+class Complex:
+    items: list[int]
+    data: dict[str, int]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    csv_output = analyzer.get_dataclass_complexity_csv()
+
+    # Check CSV header
+    assert "Dataclass,Complexity" in csv_output
+
+    # Check data rows - Simple has 2 primitives (0.2)
+    assert "Simple,0.2" in csv_output
+
+    # Complex has 1 list (1) + 1 dict (10) = 11
+    assert "Complex,11.0" in csv_output
+
+    # Check TOTAL line
+    assert "TOTAL,11.2" in csv_output
+
+    # Verify format
+    lines = csv_output.split("\n")
+    for line in lines[1:]:  # Skip header
+        if line:
+            parts = line.split(",")
+            assert len(parts) == 2
+
+
+def test_csv_unused_warnings():
+    """Test that unused warnings are properly formatted."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class Used:
+    field1: int
+    field2: str
+
+@dataclass
+class Unused:
+    data: int
+
+@route
+def index(state: Used):
+    state.field1 += 1
+    return Page(state, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    warnings = analyzer.get_unused_warnings()
+
+    # Check for unused dataclass warning
+    assert "WARNING: The following dataclasses are NOT used anywhere:" in warnings
+    assert "Unused" in warnings
+
+    # Check for unused attribute warning
+    assert "WARNING: The following attributes are NOT used anywhere:" in warnings
+    assert "Used.field2" in warnings
+    assert "Unused.data" in warnings
+
+
+def test_csv_textual_details():
+    """Test that textual details are properly formatted."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class State:
+    count: int
+
+@route
+def index(state: State):
+    return Page(state, [Button("Click", second)])
+
+@route
+def second(state: State):
+    state.count += 1
+    return Page(state, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    details = analyzer.get_textual_details()
+
+    # Check dataclasses section
+    assert "Dataclasses:" in details
+    assert "State" in details
+    assert "count" in details
+
+    # Check routes section
+    assert "Routes:" in details
+    assert "index(state)" in details
+    assert "second(state)" in details
+    assert "Button: 1" in details
+    assert "count used" in details
+
+
+def test_csv_output_with_test_data(shared_datadir):
+    """Test CSV output with basic.py test data."""
+    with open(shared_datadir / "basic.py") as f:
+        code = f.read()
+
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # Test attribute CSV
+    attr_csv = analyzer.get_dataclass_attribute_csv()
+    assert "Dataclass,Attribute,Type,Usage Count,Complexity" in attr_csv
+    assert "A,field1,int" in attr_csv
+    assert "A,field2,str" in attr_csv
+    assert "B,a,A" in attr_csv
+    assert "B,list_of_c,list[C]" in attr_csv
+
+    # Test complexity CSV
+    complexity_csv = analyzer.get_dataclass_complexity_csv()
+    assert "Dataclass,Complexity" in complexity_csv
+    assert "A,0.2" in complexity_csv
+    assert "C,0.2" in complexity_csv
+    assert "B,2.1" in complexity_csv
+    assert "TOTAL,2.5" in complexity_csv
+
+    # Test warnings
+    warnings = analyzer.get_unused_warnings()
+    assert "C.xxx" in warnings
+    assert "C.yyy" in warnings
+    assert "B.field3" in warnings
+    assert "B.list_of_c" in warnings
+
+    # Test textual details
+    details = analyzer.get_textual_details()
+    assert "Dataclasses:" in details
+    assert "Routes:" in details
+    assert "first_page" in details
+
+
+def test_csv_output_parseable():
+    """Test that CSV output can be parsed by csv module."""
+    import csv
+    import io
+
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Test:
+    x: int
+    y: str
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # Test attribute CSV is parseable
+    attr_csv = analyzer.get_dataclass_attribute_csv()
+    reader = csv.DictReader(io.StringIO(attr_csv))
+    rows = list(reader)
+    assert len(rows) == 2
+    assert rows[0]["Dataclass"] == "Test"
+    assert rows[0]["Attribute"] == "x"
+    assert rows[0]["Type"] == "int"
+
+    # Test complexity CSV is parseable
+    complexity_csv = analyzer.get_dataclass_complexity_csv()
+    reader = csv.DictReader(io.StringIO(complexity_csv))
+    rows = list(reader)
+    assert len(rows) == 2  # Test + TOTAL
+    assert rows[0]["Dataclass"] == "Test"
+    assert rows[1]["Dataclass"] == "TOTAL"
+
+
+def test_csv_output_complex_types(shared_datadir):
+    """Test CSV output with complex.py test data."""
+    with open(shared_datadir / "complex.py") as f:
+        code = f.read()
+
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # Test that State dataclass is detected
+    attr_csv = analyzer.get_dataclass_attribute_csv()
+    assert "State,x,int" in attr_csv
+    assert "State,y,str" in attr_csv
+
+    # Test complexity
+    complexity_csv = analyzer.get_dataclass_complexity_csv()
+    assert "State,0.2" in complexity_csv
+
+    # Test warnings for unused attributes
+    warnings = analyzer.get_unused_warnings()
+    assert "State.y" in warnings
+
+
+def test_csv_output_no_dataclasses():
+    """Test CSV output when there are no dataclasses."""
+    code = """
+def helper():
+    return 42
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    attr_csv = analyzer.get_dataclass_attribute_csv()
+    assert "No dataclasses found" in attr_csv
+
+    complexity_csv = analyzer.get_dataclass_complexity_csv()
+    assert complexity_csv == ""
+
+    warnings = analyzer.get_unused_warnings()
+    assert warnings == ""
+
+    details = analyzer.get_textual_details()
+    assert details == ""
+
+
+def test_csv_output_separation():
+    """Test that CSV sections can be easily separated."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class A:
+    x: int
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # Each method should produce independent output
+    attr_csv = analyzer.get_dataclass_attribute_csv()
+    complexity_csv = analyzer.get_dataclass_complexity_csv()
+    warnings = analyzer.get_unused_warnings()
+    details = analyzer.get_textual_details()
+
+    # They should be separate strings
+    assert isinstance(attr_csv, str)
+    assert isinstance(complexity_csv, str)
+    assert isinstance(warnings, str)
+    assert isinstance(details, str)
+
+    # No overlap between sections
+    assert "Dataclass,Attribute" in attr_csv
+    assert "Dataclass,Attribute" not in complexity_csv
+    assert "Dataclass,Complexity" in complexity_csv
+    assert "Dataclass,Complexity" not in attr_csv

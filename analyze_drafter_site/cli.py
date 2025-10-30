@@ -15,11 +15,6 @@ def main(path):
     """Analyze a Drafter website."""
     with open(path) as f:
         code = f.read()
-    analyzer = Analyzer()
-    analyzer.analyze(code)
-    for result in analyzer.save_as_string():
-        print(result)
-
     tree, complexity_by_section = calculate_complexity(code)
     print("\nComplexity Analysis:")
     categories = sorted(AST_CATEGORY_ORDER, key=lambda x: -x[1])
@@ -52,6 +47,12 @@ def main(path):
         ]
         line.extend(parts)
         print("\t".join(str(x) for x in line))
+    print("---" * 20)
+    print("Detailed Analysis:")
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+    for result in analyzer.save_as_string():
+        print(result)
 
 
 if __name__ == "__main__":

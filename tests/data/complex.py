@@ -55,6 +55,7 @@ def weird_stretch(state: State) -> Page:
         state,
         [
             "Hello" + "World",
+            Button("Testing", "unusual"),
             Button("Click me!", index),
             TextBox("new_name", state.x),
             Text("Oh yeah"),

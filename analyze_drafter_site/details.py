@@ -44,6 +44,9 @@ COMPONENTS = [
 ]
 LINKING_COMPONENT_NAMES = ["Link", "Button", "SubmitButton"]
 
+# Cache of Python built-in names for performance
+_BUILTIN_NAMES = frozenset(dir(builtins))
+
 
 def is_builtin_name(name: str) -> bool:
     """Check if a name is a Python built-in function or type.
@@ -54,7 +57,7 @@ def is_builtin_name(name: str) -> bool:
     Returns:
         True if the name is a built-in, False otherwise
     """
-    return name in dir(builtins)
+    return name in _BUILTIN_NAMES
 
 
 class ClassInfo:

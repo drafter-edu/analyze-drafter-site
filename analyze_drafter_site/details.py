@@ -85,26 +85,8 @@ class Analyzer(ast.NodeVisitor):
             ]
             class_info = ClassInfo(node.name, fields, base_classes)
             self.dataclasses[node.name] = class_info
-
-            # Detect composition relationships
-            for field_name, field_type in fields.items():
-                type_name = self.get_type_name(field_type)
-                # Extract the base type name (e.g., "A" from "A" or "list[A]")
-                base_type = type_name.split("[")[0]
-                if base_type in self.dataclasses or "[" in type_name:
-                    # Check if it's a reference to another dataclass
-                    if base_type != node.name:  # Avoid self-references
-                        class_info.dependencies.add(base_type)
-                    # For subscripted types like list[C], extract C
-                    if "[" in type_name and "]" in type_name:
-                        inner_type = type_name[
-                            type_name.index("[") + 1: type_name.rindex("]")
-                        ]
-                        # Handle comma-separated types like dict[str, int]
-                        for inner in inner_type.split(","):
-                            inner = inner.strip()
-                            if inner != node.name:  # Avoid self-references
-                                class_info.dependencies.add(inner)
+            # Note: Composition relationships are resolved in a second pass
+            # after all dataclasses are discovered
 
         self.generic_visit(node)
 
@@ -252,6 +234,46 @@ class Analyzer(ast.NodeVisitor):
         """Run analysis on the provided Python code."""
         tree = ast.parse(code)
         self.visit(tree)
+        # Second pass: resolve composition relationships now that all
+        # dataclasses have been discovered
+        self._resolve_class_dependencies()
+
+    def _resolve_class_dependencies(self):
+        """Resolve composition relationships between dataclasses."""
+        for class_name, class_info in self.dataclasses.items():
+            class_info.dependencies.clear()
+            for field_name, field_type in class_info.fields.items():
+                type_name = self.get_type_name(field_type)
+                # Extract potential type references
+                # Note: This handles simple cases like list[C] or
+                # dict[str, C] but may not handle deeply nested types
+                self._extract_type_references(
+                    type_name, class_name, class_info.dependencies
+                )
+
+    def _extract_type_references(self, type_name, owner_class, dependencies):
+        """Extract dataclass references from a type name."""
+        # Handle base type (e.g., "A" from "A" or "list[A]")
+        base_type = type_name.split("[")[0]
+        if base_type in self.dataclasses and base_type != owner_class:
+            dependencies.add(base_type)
+
+        # Handle subscripted types like list[C] or dict[str, C]
+        if "[" in type_name and "]" in type_name:
+            inner_type = type_name[
+                type_name.index("[") + 1: type_name.rindex("]")
+            ]
+            # Split by comma to handle types like dict[str, int]
+            for inner in inner_type.split(","):
+                inner = inner.strip()
+                # Recursively extract from nested types
+                if inner in self.dataclasses and inner != owner_class:
+                    dependencies.add(inner)
+                elif "[" in inner:
+                    # Handle nested generics (basic support)
+                    self._extract_type_references(
+                        inner, owner_class, dependencies
+                    )
 
     def generate_mermaid_class_diagram(self):
         """Generate Mermaid diagram for class relationships."""
@@ -263,7 +285,8 @@ class Analyzer(ast.NodeVisitor):
                 mermaid += f"        {type_name} {field}\n"
             mermaid += "    }\n"
             for dep in class_info.dependencies:
-                # Only show dependencies to other dataclasses that exist
+                # Only show arrows to other dataclasses that exist in this file
+                # Built-in types and external types are tracked but not shown
                 if dep in self.dataclasses:
                     mermaid += f"    {class_name} --> {dep}\n"
         return mermaid

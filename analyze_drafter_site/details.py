@@ -19,6 +19,7 @@ COMPONENTS = [
     "Link",
     "MatPlotLibPlot",
     "NumberedList",
+    "Page",
     "PageContent",
     "Pre",
     "PreformattedText",

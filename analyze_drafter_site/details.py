@@ -1,5 +1,13 @@
 import ast
+import tempfile
+import os
 from collections import defaultdict
+from typing import Dict, Optional
+from mypy import build
+from mypy.build import BuildSource
+from mypy.options import Options
+from mypy.nodes import FuncDef as MypyFuncDef, Var as MypyVar
+from mypy.types import Instance, UnionType, AnyType
 
 # Global variable of known component names
 COMPONENTS = [
@@ -67,14 +75,17 @@ class Analyzer(ast.NodeVisitor):
         self.unknown_relationships = []
         self.current_class = None
         self.current_route = None
+        self.current_function = None
         self.class_dependencies = defaultdict(set)
         self.function_calls = defaultdict(set)
         self.components_used = defaultdict(int)
         # Track attribute usage: {class_name: {field_name: count}}
-        # Note: Without full type inference, we increment usage for all
-        # dataclasses that have a field with the accessed name. This is
-        # an approximation suitable for educational code analysis.
         self.attribute_usage = defaultdict(lambda: defaultdict(int))
+        # Variable type tracking: {variable_name: dataclass_name}
+        # Built using mypy type inference
+        self.variable_types: Dict[str, Optional[str]] = {}
+        # Mypy result (set during analyze)
+        self.mypy_result = None
 
     def visit_ClassDef(self, node):
         """Handle class definitions."""
@@ -150,13 +161,19 @@ class Analyzer(ast.NodeVisitor):
                 node.name, signature, defaultdict(int), set(), set(), []
             )
             self.routes.append(self.current_route)
+            # Track function context for type resolution
+            self.current_function = node.name
             # Visit the function body to collect information
             for stmt in node.body:
                 self.visit(stmt)
             self.current_route = None
+            self.current_function = None
         else:
             # Still visit non-route functions to track their existence
+            old_function = getattr(self, 'current_function', None)
+            self.current_function = node.name
             self.generic_visit(node)
+            self.current_function = old_function
 
     def visit_Call(self, node):
         """Handle function calls throughout the AST."""
@@ -208,33 +225,100 @@ class Analyzer(ast.NodeVisitor):
     def visit_Attribute(self, node):
         """Handle attribute references to dataclass fields.
 
-        Note: Without full type inference, we increment usage for all
-        dataclasses that have a field matching the accessed attribute name.
-        This provides a reasonable approximation for educational code analysis.
+        Uses mypy type inference to accurately determine which dataclass
+        a variable belongs to, rather than matching all dataclasses with
+        the same field name.
         """
         if isinstance(node.value, ast.Name):
-            # Check if this is accessing a field on a state object
-            # We'll track any attribute access for now
+            # Check if this is accessing a field on a typed object
             if isinstance(node.ctx, ast.Load) or isinstance(node.ctx, ast.Store):
                 if self.current_route:
                     self.current_route.fields_used.add(node.attr)
-                # Track which dataclass this attribute might belong to
-                # Note: This will match ALL dataclasses with this field name
-                for class_name, class_info in self.dataclasses.items():
-                    if node.attr in class_info.fields:
-                        self.attribute_usage[class_name][node.attr] += 1
+                
+                # Try to get the type from mypy analysis
+                var_name = node.value.id
+                dataclass_type = self._get_variable_type(var_name)
+                
+                if dataclass_type:
+                    # We know the exact type from mypy!
+                    if node.attr in self.dataclasses[dataclass_type].fields:
+                        self.attribute_usage[dataclass_type][node.attr] += 1
+                else:
+                    # Fall back to old behavior: match ALL dataclasses with this field name
+                    for class_name, class_info in self.dataclasses.items():
+                        if node.attr in class_info.fields:
+                            self.attribute_usage[class_name][node.attr] += 1
         # Handle nested attribute access (e.g., b.a.field1)
         elif isinstance(node.value, ast.Attribute):
             # Continue to track the attribute name
             if isinstance(node.ctx, ast.Load) or isinstance(node.ctx, ast.Store):
                 if self.current_route:
                     self.current_route.fields_used.add(node.attr)
-                # Match the attribute to dataclasses
-                # Note: This will match ALL dataclasses with this field name
-                for class_name, class_info in self.dataclasses.items():
-                    if node.attr in class_info.fields:
-                        self.attribute_usage[class_name][node.attr] += 1
+                
+                # For nested access, try to infer the type of the intermediate attribute
+                intermediate_type = self._get_nested_type(node.value)
+                
+                if intermediate_type:
+                    # We know the exact type!
+                    if node.attr in self.dataclasses[intermediate_type].fields:
+                        self.attribute_usage[intermediate_type][node.attr] += 1
+                else:
+                    # Fall back to old behavior
+                    for class_name, class_info in self.dataclasses.items():
+                        if node.attr in class_info.fields:
+                            self.attribute_usage[class_name][node.attr] += 1
         self.generic_visit(node)
+    
+    def _get_variable_type(self, var_name):
+        """Get the dataclass type of a variable using mypy information.
+        
+        Returns the dataclass name if known, None otherwise.
+        """
+        if not hasattr(self, 'current_function') or not self.current_function:
+            return None
+        
+        # Look up the type using function.variable format
+        key = f"{self.current_function}.{var_name}"
+        return self.variable_types.get(key)
+    
+    def _get_nested_type(self, attr_node):
+        """Infer the type of a nested attribute access like b.a
+        
+        Given b.a.field1, this determines the type of 'a' by looking at
+        the type of 'b' and finding the field 'a' in that dataclass.
+        
+        Returns the dataclass name if it can be determined, None otherwise.
+        """
+        if isinstance(attr_node.value, ast.Name):
+            # Base case: b.a
+            base_var = attr_node.value.id
+            base_type = self._get_variable_type(base_var)
+            
+            if base_type and base_type in self.dataclasses:
+                # Look up the field type
+                field_name = attr_node.attr
+                if field_name in self.dataclasses[base_type].fields:
+                    field_type_node = self.dataclasses[base_type].fields[field_name]
+                    field_type = self.get_type_name(field_type_node)
+                    # Extract base type (handle list[X], etc.)
+                    field_type_base = field_type.split('[')[0]
+                    if field_type_base in self.dataclasses:
+                        return field_type_base
+        elif isinstance(attr_node.value, ast.Attribute):
+            # Recursive case: c.b.a
+            # First get the type of c.b
+            intermediate_type = self._get_nested_type(attr_node.value)
+            if intermediate_type and intermediate_type in self.dataclasses:
+                # Then get the type of the field 'a' in that type
+                field_name = attr_node.attr
+                if field_name in self.dataclasses[intermediate_type].fields:
+                    field_type_node = self.dataclasses[intermediate_type].fields[field_name]
+                    field_type = self.get_type_name(field_type_node)
+                    field_type_base = field_type.split('[')[0]
+                    if field_type_base in self.dataclasses:
+                        return field_type_base
+        
+        return None
 
     def get_function_name(self, node):
         """Get the name of a function or method being called."""
@@ -249,12 +333,114 @@ class Analyzer(ast.NodeVisitor):
         params = [arg.arg for arg in node.args.args]
         return f"{node.name}({', '.join(params)})"
 
+    def _run_mypy_analysis(self, code: str):
+        """Run mypy to get type information for variables.
+        
+        This populates self.variable_types with mappings from variable names
+        to their dataclass types (if applicable).
+        """
+        # Write code to a temporary file
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.py', delete=False
+        ) as f:
+            f.write(code)
+            temp_file = f.name
+        
+        try:
+            # Build with mypy
+            options = Options()
+            options.python_version = (3, 12)
+            options.show_traceback = False
+            options.incremental = False
+            options.ignore_missing_imports = True
+            
+            sources = [BuildSource(temp_file, '__main__', None)]
+            
+            try:
+                result = build.build(sources, options)
+                self.mypy_result = result
+                
+                # Extract type information from the main module
+                if '__main__' in result.graph:
+                    main_tree = result.graph['__main__'].tree
+                    self._extract_variable_types(main_tree)
+            except Exception:
+                # If mypy fails, we'll fall back to the old behavior
+                pass
+        finally:
+            try:
+                os.unlink(temp_file)
+            except Exception:
+                pass
+    
+    def _extract_variable_types(self, tree):
+        """Extract variable type information from mypy tree."""
+        for name, symbol in tree.names.items():
+            node = symbol.node
+            
+            # Handle function definitions to get parameter types
+            if isinstance(node, MypyFuncDef):
+                self._extract_func_params(node)
+            elif hasattr(node, 'func') and isinstance(node.func, MypyFuncDef):
+                # Handle decorated functions (e.g., @route)
+                self._extract_func_params(node.func)
+    
+    def _extract_func_params(self, func_def):
+        """Extract parameter types from a function definition."""
+        for arg in func_def.arguments:
+            var = arg.variable
+            if var.type:
+                type_name = self._get_type_name_from_mypy(var.type)
+                if type_name:
+                    # Store the mapping for this function's scope
+                    # We'll use function_name.var_name as key
+                    self.variable_types[f"{func_def.name}.{var.name}"] = type_name
+    
+    def _get_type_name_from_mypy(self, mypy_type):
+        """Extract the dataclass name from a mypy type.
+        
+        Returns the class name if it's a dataclass we're tracking,
+        None otherwise.
+        """
+        if isinstance(mypy_type, Instance):
+            # Get the full name, e.g., "__main__.State"
+            fullname = mypy_type.type.fullname
+            # Extract just the class name
+            if '.' in fullname:
+                class_name = fullname.split('.')[-1]
+            else:
+                class_name = fullname
+            
+            # Only return if it's a dataclass we're tracking
+            if class_name in self.dataclasses:
+                return class_name
+        elif isinstance(mypy_type, UnionType):
+            # For Union types, try to find a dataclass in the union
+            for item in mypy_type.items:
+                type_name = self._get_type_name_from_mypy(item)
+                if type_name:
+                    return type_name
+        
+        return None
+
     def analyze(self, code):
         """Run analysis on the provided Python code."""
+        # First pass: parse AST to discover dataclasses
         tree = ast.parse(code)
+        # Visit only class definitions first
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                self.visit_ClassDef(node)
+        
+        # Second pass: run mypy to get type information
+        # This must happen after dataclass discovery but before
+        # we traverse function bodies
+        self._run_mypy_analysis(code)
+        
+        # Third pass: visit the full tree to analyze routes and usage
         self.visit(tree)
-        # Second pass: resolve composition relationships now that all
-        # dataclasses have been discovered
+        
+        # Fourth pass: resolve composition relationships
         self._resolve_class_dependencies()
 
     def _resolve_class_dependencies(self):

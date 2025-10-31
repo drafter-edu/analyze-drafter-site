@@ -867,6 +867,10 @@ def make_todo_list(todos: list[TodoItem]) -> PageContent:
             Div(todo.name),
         ])
     return Table(items)
+
+@route
+def toggle_complete(state: State, target_id: int) -> Page:
+    return index(state)
 """
     analyzer = Analyzer()
     analyzer.analyze(code)
@@ -877,7 +881,62 @@ def make_todo_list(todos: list[TodoItem]) -> PageContent:
     # make_todo_list should call make_todo_toggle (this was the bug)
     assert "make_todo_toggle" in analyzer.function_calls["make_todo_list"]
 
+    # make_todo_toggle should link to toggle_complete route via Button
+    assert "toggle_complete" in analyzer.function_calls["make_todo_toggle"]
+
     # Function diagram should show the connection
     diagram = analyzer.generate_mermaid_function_diagram()
     assert "index --> make_todo_list" in diagram
     assert "make_todo_list --> make_todo_toggle" in diagram
+    assert "make_todo_toggle --> toggle_complete" in diagram
+
+
+def test_helper_function_button_links_to_routes():
+    """Test that Button links in helper functions to routes are captured (GitHub issue)."""
+    code = """
+from drafter import *
+
+@dataclass
+class TodoItem:
+    id: int
+    name: str
+
+@dataclass
+class State:
+    todos: list[TodoItem]
+
+@route
+def index(state: State) -> Page:
+    current_items = make_todo_list(state.todos)
+    return Page(state, [current_items])
+
+def make_todo_list(todos: list[TodoItem]) -> PageContent:
+    if not todos:
+        return Div("No items yet.")
+    items = []
+    for todo in todos:
+        items.append([
+            Button("Remove", "remove_todo", todo.id),
+            Button("Edit", "edit_todo", todo.id),
+        ])
+    return Table(items)
+
+@route
+def remove_todo(state: State, target_id: int) -> Page:
+    return index(state)
+
+@route
+def edit_todo(state: State, target_id: int) -> Page:
+    return index(state)
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # make_todo_list should link to remove_todo and edit_todo routes via Buttons
+    assert "remove_todo" in analyzer.function_calls["make_todo_list"]
+    assert "edit_todo" in analyzer.function_calls["make_todo_list"]
+
+    # Function diagram should show all connections
+    diagram = analyzer.generate_mermaid_function_diagram()
+    assert "make_todo_list --> remove_todo" in diagram
+    assert "make_todo_list --> edit_todo" in diagram

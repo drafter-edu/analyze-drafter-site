@@ -214,7 +214,7 @@ class Analyzer(ast.NodeVisitor):
             self.components_used[func_name] += 1
 
             # Check if it's a linking component (Button, Link, SubmitButton)
-            if func_name in LINKING_COMPONENT_NAMES and self.current_route:
+            if func_name in LINKING_COMPONENT_NAMES and self.current_function:
                 # The second argument (index 1) is the link target
                 if len(node.args) >= 2:
                     target = node.args[1]
@@ -233,8 +233,9 @@ class Analyzer(ast.NodeVisitor):
                         target_name
                         and target_name in self.user_defined_functions
                     ):
-                        self.current_route.function_calls.add(target_name)
-                        self.function_calls[self.current_route.name].add(
+                        if self.current_route:
+                            self.current_route.function_calls.add(target_name)
+                        self.function_calls[self.current_function].add(
                             target_name
                         )
         elif func_name and self.current_function:

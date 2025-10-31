@@ -228,28 +228,31 @@ class Analyzer(ast.NodeVisitor):
                     if target_name and target_name in self.user_defined_functions:
                         self.current_route.function_calls.add(target_name)
                         self.function_calls[self.current_route.name].add(target_name)
-        elif func_name and self.current_route:
-            # Only track user-defined functions (not built-ins, methods, or
+        elif func_name and self.current_function:
+            # Track user-defined functions (not built-ins, methods, or
             # components). Check if this is a direct function call (not a
-            # method call)
+            # method call). Track calls from both routes and helper functions.
             if (isinstance(node.func, ast.Name) and
                     func_name in self.user_defined_functions):
-                self.current_route.function_calls.add(func_name)
-                self.function_calls[self.current_route.name].add(func_name)
+                if self.current_route:
+                    self.current_route.function_calls.add(func_name)
+                self.function_calls[self.current_function].add(func_name)
 
         # Continue visiting child nodes
         self.generic_visit(node)
 
     def visit_Return(self, node):
-        """Handle return statements that might call other route functions."""
+        """Handle return statements that might call other functions."""
         if node.value and isinstance(node.value, ast.Call):
             func_name = self.get_function_name(node.value)
-            # Only track user-defined functions (not built-ins, methods, or components)
-            if (func_name and self.current_route and
+            # Track user-defined functions (not built-ins, methods, or components)
+            # from both routes and helper functions.
+            if (func_name and self.current_function and
                     isinstance(node.value.func, ast.Name) and
                     func_name in self.user_defined_functions):
-                self.current_route.function_calls.add(func_name)
-                self.function_calls[self.current_route.name].add(func_name)
+                if self.current_route:
+                    self.current_route.function_calls.add(func_name)
+                self.function_calls[self.current_function].add(func_name)
         self.generic_visit(node)
 
     def visit_Attribute(self, node):

@@ -552,11 +552,15 @@ def index(state: Used):
     warnings = analyzer.get_unused_warnings()
 
     # Check for unused dataclass warning
-    assert "WARNING: The following dataclasses are NOT used anywhere:" in warnings
+    assert (
+        "WARNING: The following dataclasses are NOT used anywhere:" in warnings
+    )
     assert "Unused" in warnings
 
     # Check for unused attribute warning
-    assert "WARNING: The following attributes are NOT used anywhere:" in warnings
+    assert (
+        "WARNING: The following attributes are NOT used anywhere:" in warnings
+    )
     assert "Used.field2" in warnings
     assert "Unused.data" in warnings
 

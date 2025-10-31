@@ -166,7 +166,7 @@ class Analyzer(ast.NodeVisitor):
         """Handle function definitions with @route decorator."""
         # Track all user-defined functions for call graph filtering
         self.user_defined_functions.add(node.name)
-        
+
         is_route = False
         for decorator in node.decorator_list:
             if isinstance(decorator, ast.Name) and decorator.id == "route":
@@ -228,9 +228,11 @@ class Analyzer(ast.NodeVisitor):
                         self.current_route.function_calls.add(target_name)
                         self.function_calls[self.current_route.name].add(target_name)
         elif func_name and self.current_route:
-            # Only track user-defined functions (not built-ins, methods, or components)
-            # Check if this is a direct function call (not a method call)
-            if isinstance(node.func, ast.Name) and func_name in self.user_defined_functions:
+            # Only track user-defined functions (not built-ins, methods, or
+            # components). Check if this is a direct function call (not a
+            # method call)
+            if (isinstance(node.func, ast.Name) and
+                    func_name in self.user_defined_functions):
                 self.current_route.function_calls.add(func_name)
                 self.function_calls[self.current_route.name].add(func_name)
 
@@ -458,7 +460,7 @@ class Analyzer(ast.NodeVisitor):
     def analyze(self, code):
         """Run analysis on the provided Python code."""
         tree = ast.parse(code)
-        
+
         # First pass: discover dataclasses and user-defined functions
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):

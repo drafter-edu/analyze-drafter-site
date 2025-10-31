@@ -154,11 +154,13 @@ def index(state):
     analyzer = Analyzer()
     analyzer.analyze(code)
 
-    # Methods are attributes, so they're tracked differently
-    # They shouldn't appear as function calls
-    # The current implementation might track method names through get_function_name
-    # This test just ensures the analyzer doesn't crash on method calls
-    # Method calls are tracked as attributes, not in the function call graph
+    # Methods should not appear in the function call graph
+    if "index" in analyzer.function_calls:
+        calls = analyzer.function_calls["index"]
+        # These method names should NOT be tracked
+        assert "append" not in calls
+        assert "extend" not in calls
+        assert "upper" not in calls
 
 
 def test_empty_call_graph_with_only_builtins():

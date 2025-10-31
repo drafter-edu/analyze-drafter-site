@@ -104,6 +104,8 @@ class Analyzer(ast.NodeVisitor):
         self.variable_types: Dict[str, Optional[str]] = {}
         # Mypy result (set during analyze)
         self.mypy_result = None
+        # Track user-defined function names for call graph filtering
+        self.user_defined_functions = set()
 
     def visit_ClassDef(self, node):
         """Handle class definitions."""
@@ -219,12 +221,15 @@ class Analyzer(ast.NodeVisitor):
                     ):
                         target_name = target.value
 
-                    if target_name:
+                    if target_name and target_name in self.user_defined_functions:
                         self.current_route.function_calls.add(target_name)
                         self.function_calls[self.current_route.name].add(target_name)
-        else:
-            # Track function calls (excluding built-ins)
-            if func_name and self.current_route and not is_builtin_name(func_name):
+        elif func_name and self.current_route:
+            # Only track user-defined functions (not built-ins, methods, or
+            # components). Check if this is a direct function call (not a
+            # method call)
+            if (isinstance(node.func, ast.Name) and
+                    func_name in self.user_defined_functions):
                 self.current_route.function_calls.add(func_name)
                 self.function_calls[self.current_route.name].add(func_name)
 
@@ -235,10 +240,10 @@ class Analyzer(ast.NodeVisitor):
         """Handle return statements that might call other route functions."""
         if node.value and isinstance(node.value, ast.Call):
             func_name = self.get_function_name(node.value)
-            # Only track if it's not a built-in, not a component, and is in a route
+            # Only track user-defined functions (not built-ins, methods, or components)
             if (func_name and self.current_route and
-                    not is_builtin_name(func_name) and
-                    func_name not in COMPONENTS):
+                    isinstance(node.value.func, ast.Name) and
+                    func_name in self.user_defined_functions):
                 self.current_route.function_calls.add(func_name)
                 self.function_calls[self.current_route.name].add(func_name)
         self.generic_visit(node)
@@ -451,12 +456,15 @@ class Analyzer(ast.NodeVisitor):
 
     def analyze(self, code):
         """Run analysis on the provided Python code."""
-        # First pass: parse AST to discover dataclasses
         tree = ast.parse(code)
-        # Visit only class definitions first
+
+        # First pass: discover dataclasses and user-defined functions
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 self.visit_ClassDef(node)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                # Track all user-defined functions for call graph filtering
+                self.user_defined_functions.add(node.name)
 
         # Second pass: run mypy to get type information
         # This must happen after dataclass discovery but before

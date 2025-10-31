@@ -164,9 +164,6 @@ class Analyzer(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node):
         """Handle function definitions with @route decorator."""
-        # Track all user-defined functions for call graph filtering
-        self.user_defined_functions.add(node.name)
-
         is_route = False
         for decorator in node.decorator_list:
             if isinstance(decorator, ast.Name) and decorator.id == "route":
@@ -465,7 +462,7 @@ class Analyzer(ast.NodeVisitor):
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 self.visit_ClassDef(node)
-            elif isinstance(node, ast.FunctionDef):
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 # Track all user-defined functions for call graph filtering
                 self.user_defined_functions.add(node.name)
 

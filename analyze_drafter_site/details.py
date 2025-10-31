@@ -150,6 +150,10 @@ class Analyzer(ast.NodeVisitor):
             elif isinstance(annotation.slice, ast.Tuple):
                 slice_types = [self.get_type_name(elt) for elt in annotation.slice.elts]
                 return f"{base}[{', '.join(slice_types)}]"
+            elif isinstance(annotation.slice, ast.Subscript):
+                # Handle nested subscripts like list[list[Tile]]
+                slice_type = self.get_type_name(annotation.slice)
+                return f"{base}[{slice_type}]"
             else:
                 return base
         elif isinstance(annotation, ast.Constant):

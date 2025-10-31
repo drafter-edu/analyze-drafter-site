@@ -552,11 +552,15 @@ def index(state: Used):
     warnings = analyzer.get_unused_warnings()
 
     # Check for unused dataclass warning
-    assert "WARNING: The following dataclasses are NOT used anywhere:" in warnings
+    assert (
+        "WARNING: The following dataclasses are NOT used anywhere:" in warnings
+    )
     assert "Unused" in warnings
 
     # Check for unused attribute warning
-    assert "WARNING: The following attributes are NOT used anywhere:" in warnings
+    assert (
+        "WARNING: The following attributes are NOT used anywhere:" in warnings
+    )
     assert "Used.field2" in warnings
     assert "Unused.data" in warnings
 
@@ -743,3 +747,137 @@ class A:
     assert "Dataclass,Attribute" not in complexity_csv
     assert "Dataclass,Complexity" in complexity_csv
     assert "Dataclass,Complexity" not in attr_csv
+
+
+def test_helper_function_calls_tracked():
+    """Test that helper functions calling other helper functions are tracked."""
+    code = """
+from drafter import *
+
+@route
+def route1(state):
+    result = helper1()
+    return Page(state, [result])
+
+def helper1():
+    return helper2()
+
+def helper2():
+    return helper3()
+
+def helper3():
+    return "nested"
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # route1 should call helper1
+    assert "helper1" in analyzer.function_calls["route1"]
+
+    # helper1 should call helper2
+    assert "helper2" in analyzer.function_calls["helper1"]
+
+    # helper2 should call helper3
+    assert "helper3" in analyzer.function_calls["helper2"]
+
+    # Function diagram should show all connections
+    diagram = analyzer.generate_mermaid_function_diagram()
+    assert "route1 --> helper1" in diagram
+    assert "helper1 --> helper2" in diagram
+    assert "helper2 --> helper3" in diagram
+
+
+def test_helper_function_with_multiple_calls():
+    """Test that helper functions calling multiple other helpers are tracked."""
+    code = """
+from drafter import *
+
+@route
+def main_route(state):
+    process_data()
+    return Page(state, [])
+
+def process_data():
+    validate_input()
+    transform_data()
+    save_result()
+
+def validate_input():
+    pass
+
+def transform_data():
+    pass
+
+def save_result():
+    pass
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # main_route should call process_data
+    assert "process_data" in analyzer.function_calls["main_route"]
+
+    # process_data should call all three helpers
+    process_calls = analyzer.function_calls["process_data"]
+    assert "validate_input" in process_calls
+    assert "transform_data" in process_calls
+    assert "save_result" in process_calls
+
+    # Function diagram should show all connections
+    diagram = analyzer.generate_mermaid_function_diagram()
+    assert "main_route --> process_data" in diagram
+    assert "process_data --> validate_input" in diagram
+    assert "process_data --> transform_data" in diagram
+    assert "process_data --> save_result" in diagram
+
+
+def test_todo_app_make_todo_list_tracked():
+    """Test that make_todo_list is tracked in the call graph (issue regression test)."""
+    code = """
+from drafter import *
+
+@dataclass
+class TodoItem:
+    id: int
+    name: str
+    completed: bool
+
+@dataclass
+class State:
+    todos: list[TodoItem]
+
+@route
+def index(state: State) -> Page:
+    current_items = make_todo_list(state.todos)
+    return Page(state, [current_items])
+
+def make_todo_toggle(completed: bool, target_id: int) -> Button:
+    if completed:
+        return Button("☑️", "toggle_complete", target_id)
+    else:
+        return Button("🔲", "toggle_complete", target_id)
+
+def make_todo_list(todos: list[TodoItem]) -> PageContent:
+    if not todos:
+        return Div("No items yet.")
+    items = []
+    for todo in todos:
+        items.append([
+            make_todo_toggle(todo.completed, todo.id),
+            Div(todo.name),
+        ])
+    return Table(items)
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # index should call make_todo_list
+    assert "make_todo_list" in analyzer.function_calls["index"]
+
+    # make_todo_list should call make_todo_toggle (this was the bug)
+    assert "make_todo_toggle" in analyzer.function_calls["make_todo_list"]
+
+    # Function diagram should show the connection
+    diagram = analyzer.generate_mermaid_function_diagram()
+    assert "index --> make_todo_list" in diagram
+    assert "make_todo_list --> make_todo_toggle" in diagram

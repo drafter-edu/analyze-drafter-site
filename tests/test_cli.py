@@ -1,5 +1,6 @@
 """Tests for the CLI interface and output format."""
 
+from pathlib import Path
 from click.testing import CliRunner
 from analyze_drafter_site.cli import main
 
@@ -293,8 +294,6 @@ def test_cli_default_files_created(shared_datadir, tmp_path):
         result = runner.invoke(main, [str(basic_file)])
 
         assert result.exit_code == 0
-        from pathlib import Path
-
         assert Path("analysis.csv").exists()
         assert Path("analysis.mmd").exists()
         assert Path("analysis.html").exists()

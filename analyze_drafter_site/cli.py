@@ -58,7 +58,7 @@ def csv_to_html_table(csv_content):
         return ""
 
     html_parts = [
-        "    <table>",
+        "    <table class='sortable'>",
         "        <thead>",
         "            <tr>",
     ]
@@ -108,6 +108,13 @@ def generate_html_output(complexity_by_section, analyzer):
         '        import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";',
         "        mermaid.initialize({ startOnLoad: true });",
         "    </script>",
+        '    <link href="https://cdn.jsdelivr.net/gh/tofsjonas/sortable@latest/dist/sortable.min.css" rel="stylesheet" />',
+        '    <script src="https://cdn.jsdelivr.net/gh/tofsjonas/sortable@latest/dist/sortable.auto.min.js"></script>',
+        "    <style>",
+        "        table {",
+        "            table-layout: auto;",
+        "        }",
+        "    </style>",
         "</head>",
         "<body>",
         "    <h1>Drafter Site Analysis</h1>",
@@ -144,17 +151,6 @@ def generate_html_output(complexity_by_section, analyzer):
             ]
         )
 
-    # Add textual details with escaping
-    html_parts.extend(
-        [
-            "",
-            "    <h2>Details</h2>",
-            "    <pre>",
-            html.escape(analyzer.get_textual_details()),
-            "    </pre>",
-        ]
-    )
-
     # Add Mermaid diagrams (without escaping - Mermaid needs raw syntax)
     html_parts.extend(
         [
@@ -171,6 +167,17 @@ def generate_html_output(complexity_by_section, analyzer):
             "",
             "</body>",
             "</html>",
+        ]
+    )
+
+    # Add textual details with escaping
+    html_parts.extend(
+        [
+            "",
+            "    <h2>Details</h2>",
+            "    <pre>",
+            html.escape(analyzer.get_textual_details()),
+            "    </pre>",
         ]
     )
 

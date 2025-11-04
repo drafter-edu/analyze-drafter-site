@@ -155,18 +155,18 @@ def generate_html_output(complexity_by_section, analyzer):
         ]
     )
 
-    # Add Mermaid diagrams with escaping
+    # Add Mermaid diagrams (without escaping - Mermaid needs raw syntax)
     html_parts.extend(
         [
             "",
             "    <h2>Class Diagram</h2>",
             '    <div class="mermaid">',
-            html.escape(analyzer.generate_mermaid_class_diagram()),
+            analyzer.generate_mermaid_class_diagram(),
             "    </div>",
             "",
             "    <h2>Function Call Graph</h2>",
             '    <div class="mermaid">',
-            html.escape(analyzer.generate_mermaid_function_diagram()),
+            analyzer.generate_mermaid_function_diagram(),
             "    </div>",
             "",
             "</body>",

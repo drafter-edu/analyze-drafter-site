@@ -5,6 +5,9 @@ This module provides a CLI interface for analyzing Drafter websites.
 First parameter is the path to the Python file to analyze.
 """
 
+import csv
+import html
+import io
 import click
 from analyze_drafter_site import Analyzer, calculate_complexity, AST_CATEGORY_ORDER
 
@@ -42,6 +45,55 @@ def generate_all_mermaid(analyzer):
     return f"{analyzer.generate_mermaid_class_diagram()}\n\n{analyzer.generate_mermaid_function_diagram()}"
 
 
+def csv_to_html_table(csv_content):
+    """Convert CSV content to HTML table with proper escaping."""
+    if not csv_content.strip():
+        return ""
+
+    # Parse CSV properly using csv module
+    reader = csv.reader(io.StringIO(csv_content))
+    rows = list(reader)
+
+    if not rows:
+        return ""
+
+    html_parts = [
+        "    <table>",
+        "        <thead>",
+        "            <tr>",
+    ]
+
+    # Add header row with escaping
+    header = rows[0]
+    for col in header:
+        html_parts.append(f"                <th>{html.escape(col)}</th>")
+
+    html_parts.extend(
+        [
+            "            </tr>",
+            "        </thead>",
+            "        <tbody>",
+        ]
+    )
+
+    # Add data rows with escaping
+    for row in rows[1:]:
+        if any(row):  # Skip empty rows
+            html_parts.append("            <tr>")
+            for col in row:
+                html_parts.append(f"                <td>{html.escape(col)}</td>")
+            html_parts.append("            </tr>")
+
+    html_parts.extend(
+        [
+            "        </tbody>",
+            "    </table>",
+        ]
+    )
+
+    return "\n".join(html_parts)
+
+
 def generate_html_output(complexity_by_section, analyzer):
     """Generate HTML output with tables and embedded Mermaid rendering."""
     html_parts = [
@@ -61,112 +113,25 @@ def generate_html_output(complexity_by_section, analyzer):
         "    <h1>Drafter Site Analysis</h1>",
         "",
         "    <h2>Complexity Analysis</h2>",
-        "    <table>",
-        "        <thead>",
-        "            <tr>",
-        "                <th>Name</th><th>Start</th><th>End</th><th>Total</th>",
-        "                <th>Unusual</th><th>Important</th><th>Good</th><th>Mundane</th><th>Drafter</th>",
-        "            </tr>",
-        "        </thead>",
-        "        <tbody>",
     ]
 
-    categories = sorted(AST_CATEGORY_ORDER, key=lambda x: -x[1])
-    for section in complexity_by_section:
-        score = section["score"]
-        parts = [str(score["parts"][category]) for category, order in categories]
-        html_parts.append("            <tr>")
-        html_parts.append(f'                <td>{section["name"]}</td>')
-        html_parts.append(f'                <td>{section["startLine"]}</td>')
-        html_parts.append(f'                <td>{section["endLine"]}</td>')
-        html_parts.append(f'                <td>{score["total"]}</td>')
-        for part in parts:
-            html_parts.append(f"                <td>{part}</td>")
-        html_parts.append("            </tr>")
+    # Generate complexity table with proper escaping
+    complexity_csv = generate_complexity_csv(complexity_by_section)
+    html_parts.append(csv_to_html_table(complexity_csv))
 
-    html_parts.extend(
-        [
-            "        </tbody>",
-            "    </table>",
-            "",
-            "    <h2>Dataclass Attributes</h2>",
-        ]
-    )
+    html_parts.extend(["", "    <h2>Dataclass Attributes</h2>"])
 
-    # Convert CSV to HTML table for dataclass attributes
+    # Generate dataclass attributes table with proper escaping
     attr_csv = analyzer.get_dataclass_attribute_csv()
-    attr_lines = attr_csv.strip().split("\n")
-    if attr_lines:
-        header = attr_lines[0].split(",")
-        html_parts.extend(
-            [
-                "    <table>",
-                "        <thead>",
-                "            <tr>",
-            ]
-        )
-        for col in header:
-            html_parts.append(f"                <th>{col}</th>")
-        html_parts.extend(
-            [
-                "            </tr>",
-                "        </thead>",
-                "        <tbody>",
-            ]
-        )
-        for line in attr_lines[1:]:
-            if line.strip():
-                cols = line.split(",")
-                html_parts.append("            <tr>")
-                for col in cols:
-                    html_parts.append(f"                <td>{col}</td>")
-                html_parts.append("            </tr>")
-        html_parts.extend(
-            [
-                "        </tbody>",
-                "    </table>",
-            ]
-        )
+    html_parts.append(csv_to_html_table(attr_csv))
 
-    html_parts.append("")
-    html_parts.append("    <h2>Dataclass Complexity</h2>")
+    html_parts.extend(["", "    <h2>Dataclass Complexity</h2>"])
 
-    # Convert CSV to HTML table for complexity scores
+    # Generate complexity scores table with proper escaping
     complexity_csv = analyzer.get_dataclass_complexity_csv()
-    complexity_lines = complexity_csv.strip().split("\n")
-    if complexity_lines:
-        header = complexity_lines[0].split(",")
-        html_parts.extend(
-            [
-                "    <table>",
-                "        <thead>",
-                "            <tr>",
-            ]
-        )
-        for col in header:
-            html_parts.append(f"                <th>{col}</th>")
-        html_parts.extend(
-            [
-                "            </tr>",
-                "        </thead>",
-                "        <tbody>",
-            ]
-        )
-        for line in complexity_lines[1:]:
-            if line.strip():
-                cols = line.split(",")
-                html_parts.append("            <tr>")
-                for col in cols:
-                    html_parts.append(f"                <td>{col}</td>")
-                html_parts.append("            </tr>")
-        html_parts.extend(
-            [
-                "        </tbody>",
-                "    </table>",
-            ]
-        )
+    html_parts.append(csv_to_html_table(complexity_csv))
 
-    # Add warnings if present
+    # Add warnings if present with escaping
     warnings = analyzer.get_unused_warnings()
     if warnings:
         html_parts.extend(
@@ -174,34 +139,34 @@ def generate_html_output(complexity_by_section, analyzer):
                 "",
                 "    <h2>Warnings</h2>",
                 "    <pre>",
-                warnings,
+                html.escape(warnings),
                 "    </pre>",
             ]
         )
 
-    # Add textual details
+    # Add textual details with escaping
     html_parts.extend(
         [
             "",
             "    <h2>Details</h2>",
             "    <pre>",
-            analyzer.get_textual_details(),
+            html.escape(analyzer.get_textual_details()),
             "    </pre>",
         ]
     )
 
-    # Add Mermaid diagrams
+    # Add Mermaid diagrams with escaping
     html_parts.extend(
         [
             "",
             "    <h2>Class Diagram</h2>",
             '    <div class="mermaid">',
-            analyzer.generate_mermaid_class_diagram(),
+            html.escape(analyzer.generate_mermaid_class_diagram()),
             "    </div>",
             "",
             "    <h2>Function Call Graph</h2>",
             '    <div class="mermaid">',
-            analyzer.generate_mermaid_function_diagram(),
+            html.escape(analyzer.generate_mermaid_function_diagram()),
             "    </div>",
             "",
             "</body>",

@@ -1,5 +1,6 @@
 """Tests for the CLI interface and output format."""
 
+import os
 from click.testing import CliRunner
 from analyze_drafter_site.cli import main
 
@@ -139,3 +140,160 @@ def test_cli_complex_test_data(shared_datadir):
     # Should have unused warning
     assert "WARNING:" in output
     assert "State.y" in output
+
+
+def test_cli_csv_file_output(shared_datadir, tmp_path):
+    """Test that CSV file output works correctly."""
+    basic_file = shared_datadir / "basic.py"
+    csv_file = tmp_path / "test.csv"
+
+    runner = CliRunner()
+    result = runner.invoke(main, [str(basic_file), "--csv-file", str(csv_file)])
+
+    assert result.exit_code == 0
+    assert csv_file.exists()
+
+    # Verify CSV content
+    content = csv_file.read_text()
+    assert "Name,Start,End,Total" in content
+    assert "Dataclass,Attribute,Type,Usage Count,Complexity" in content
+    assert "Dataclass,Complexity" in content
+    assert "first_page" in content
+    assert "A,field1,int" in content
+
+
+def test_cli_mermaid_file_output(shared_datadir, tmp_path):
+    """Test that Mermaid file output works correctly."""
+    basic_file = shared_datadir / "basic.py"
+    mermaid_file = tmp_path / "test.mmd"
+
+    runner = CliRunner()
+    result = runner.invoke(main, [str(basic_file), "--mermaid-file", str(mermaid_file)])
+
+    assert result.exit_code == 0
+    assert mermaid_file.exists()
+
+    # Verify Mermaid content
+    content = mermaid_file.read_text()
+    assert "classDiagram" in content
+    assert "graph TD" in content
+    assert "class A {" in content
+    assert "class B {" in content
+
+
+def test_cli_html_file_output(shared_datadir, tmp_path):
+    """Test that HTML file output works correctly."""
+    basic_file = shared_datadir / "basic.py"
+    html_file = tmp_path / "test.html"
+
+    runner = CliRunner()
+    result = runner.invoke(main, [str(basic_file), "--html-file", str(html_file)])
+
+    assert result.exit_code == 0
+    assert html_file.exists()
+
+    # Verify HTML content
+    content = html_file.read_text()
+    assert "<!DOCTYPE html>" in content
+    assert '<html lang="en">' in content
+    assert "<title>Drafter Site Analysis</title>" in content
+    assert "water.css" in content  # CSS framework
+    assert "mermaid" in content  # Mermaid library
+    assert "<table>" in content
+    assert "<h2>Complexity Analysis</h2>" in content
+    assert "<h2>Dataclass Attributes</h2>" in content
+    assert "<h2>Class Diagram</h2>" in content
+    assert "<h2>Function Call Graph</h2>" in content
+
+
+def test_cli_no_stdout(shared_datadir, tmp_path):
+    """Test that --no-stdout prevents output to stdout."""
+    basic_file = shared_datadir / "basic.py"
+
+    runner = CliRunner()
+    result = runner.invoke(main, [str(basic_file), "--no-stdout"])
+
+    assert result.exit_code == 0
+    # Output should be empty or minimal
+    assert "Name,Start,End,Total" not in result.output
+    assert "classDiagram" not in result.output
+
+
+def test_cli_disable_csv_output(shared_datadir, tmp_path):
+    """Test that --no-csv prevents CSV file creation."""
+    basic_file = shared_datadir / "basic.py"
+    csv_file = tmp_path / "analysis.csv"
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(main, [str(basic_file), "--no-csv"])
+
+    assert result.exit_code == 0
+    assert not csv_file.exists()
+
+
+def test_cli_disable_mermaid_output(shared_datadir, tmp_path):
+    """Test that --no-mermaid prevents Mermaid file creation."""
+    basic_file = shared_datadir / "basic.py"
+    mermaid_file = tmp_path / "analysis.mmd"
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(main, [str(basic_file), "--no-mermaid"])
+
+    assert result.exit_code == 0
+    assert not mermaid_file.exists()
+
+
+def test_cli_disable_html_output(shared_datadir, tmp_path):
+    """Test that --no-html prevents HTML file creation."""
+    basic_file = shared_datadir / "basic.py"
+    html_file = tmp_path / "analysis.html"
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(main, [str(basic_file), "--no-html"])
+
+    assert result.exit_code == 0
+    assert not html_file.exists()
+
+
+def test_cli_custom_filenames(shared_datadir, tmp_path):
+    """Test that custom filenames work for all output types."""
+    basic_file = shared_datadir / "basic.py"
+    csv_file = tmp_path / "custom.csv"
+    mermaid_file = tmp_path / "custom.mmd"
+    html_file = tmp_path / "custom.html"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            str(basic_file),
+            "--csv-file",
+            str(csv_file),
+            "--mermaid-file",
+            str(mermaid_file),
+            "--html-file",
+            str(html_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert csv_file.exists()
+    assert mermaid_file.exists()
+    assert html_file.exists()
+
+
+def test_cli_default_files_created(shared_datadir, tmp_path):
+    """Test that default filenames are used when not specified."""
+    basic_file = shared_datadir / "basic.py"
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(main, [str(basic_file)])
+
+        assert result.exit_code == 0
+        assert os.path.exists("analysis.csv")
+        assert os.path.exists("analysis.mmd")
+        assert os.path.exists("analysis.html")

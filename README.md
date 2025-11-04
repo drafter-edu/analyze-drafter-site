@@ -25,10 +25,10 @@ $ analyze_drafter_site path/to/site.py
 
 ### Output Formats
 
-By default, the tool outputs to stdout and creates three files:
-- `analysis.csv` - All complexity and dataclass data in CSV format
-- `analysis.mmd` - Mermaid class diagram and function call graph
-- `analysis.html` - Full HTML report with tables and rendered diagrams
+By default, the tool outputs to stdout and creates three files in the `./dist` directory:
+- `dist/analysis.csv` - All complexity and dataclass data in CSV format
+- `dist/analysis.mmd` - Mermaid class diagram and function call graph
+- `dist/analysis.html` - Full HTML report with tables and rendered diagrams
 
 ### Command Line Options
 
@@ -36,6 +36,7 @@ By default, the tool outputs to stdout and creates three files:
 $ analyze_drafter_site --help
 
 Options:
+  --output-dir TEXT         Output directory for all files (default: ./dist)
   --csv / --no-csv          Output CSV data to file (default: on)
   --csv-file TEXT           CSV output filename (default: analysis.csv)
   --mermaid / --no-mermaid  Output Mermaid diagrams to file (default: on)
@@ -47,14 +48,20 @@ Options:
 
 ### Examples
 
+Specify a custom output directory:
+```bash
+$ analyze_drafter_site site.py --output-dir ./results
+```
+
 Generate only HTML output with custom filename:
 ```bash
 $ analyze_drafter_site site.py --no-csv --no-mermaid --html-file report.html
 ```
 
-Generate all outputs with custom filenames:
+Generate all outputs with custom directory and filenames:
 ```bash
 $ analyze_drafter_site site.py \
+  --output-dir ./grading \
   --csv-file results.csv \
   --mermaid-file diagrams.mmd \
   --html-file report.html

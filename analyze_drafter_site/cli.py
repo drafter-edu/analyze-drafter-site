@@ -8,6 +8,7 @@ First parameter is the path to the Python file to analyze.
 import csv
 import html
 import io
+import os
 import click
 from analyze_drafter_site import Analyzer, calculate_complexity, AST_CATEGORY_ORDER
 
@@ -186,6 +187,7 @@ def generate_html_output(complexity_by_section, analyzer):
 
 @click.command()
 @click.argument("path", type=click.Path(exists=True))
+@click.option("--output-dir", default="./dist", help="Output directory for all files")
 @click.option("--csv/--no-csv", default=True, help="Output CSV data to file")
 @click.option("--csv-file", default="analysis.csv", help="CSV output filename")
 @click.option(
@@ -195,7 +197,7 @@ def generate_html_output(complexity_by_section, analyzer):
 @click.option("--html/--no-html", default=True, help="Output HTML report to file")
 @click.option("--html-file", default="analysis.html", help="HTML output filename")
 @click.option("--stdout/--no-stdout", default=True, help="Output plain text to stdout")
-def main(path, csv, csv_file, mermaid, mermaid_file, html, html_file, stdout):
+def main(path, output_dir, csv, csv_file, mermaid, mermaid_file, html, html_file, stdout):
     """Analyze a Drafter website."""
     with open(path, encoding="utf-8") as f:
         code = f.read()
@@ -207,20 +209,27 @@ def main(path, csv, csv_file, mermaid, mermaid_file, html, html_file, stdout):
     analyzer = Analyzer()
     analyzer.analyze(code)
 
+    # Create output directory if it doesn't exist
+    if csv or mermaid or html:
+        os.makedirs(output_dir, exist_ok=True)
+
     # Generate outputs
     if csv:
         csv_content = generate_all_csv(complexity_by_section, analyzer)
-        with open(csv_file, "w", encoding="utf-8") as f:
+        csv_path = os.path.join(output_dir, csv_file)
+        with open(csv_path, "w", encoding="utf-8") as f:
             f.write(csv_content)
 
     if mermaid:
         mermaid_content = generate_all_mermaid(analyzer)
-        with open(mermaid_file, "w", encoding="utf-8") as f:
+        mermaid_path = os.path.join(output_dir, mermaid_file)
+        with open(mermaid_path, "w", encoding="utf-8") as f:
             f.write(mermaid_content)
 
     if html:
         html_content = generate_html_output(complexity_by_section, analyzer)
-        with open(html_file, "w", encoding="utf-8") as f:
+        html_path = os.path.join(output_dir, html_file)
+        with open(html_path, "w", encoding="utf-8") as f:
             f.write(html_content)
 
     if stdout:

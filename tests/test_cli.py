@@ -145,10 +145,11 @@ def test_cli_complex_test_data(shared_datadir):
 def test_cli_csv_file_output(shared_datadir, tmp_path):
     """Test that CSV file output works correctly."""
     basic_file = shared_datadir / "basic.py"
-    csv_file = tmp_path / "test.csv"
+    output_dir = tmp_path / "output"
+    csv_file = output_dir / "test.csv"
 
     runner = CliRunner()
-    result = runner.invoke(main, [str(basic_file), "--csv-file", str(csv_file)])
+    result = runner.invoke(main, [str(basic_file), "--output-dir", str(output_dir), "--csv-file", "test.csv"])
 
     assert result.exit_code == 0
     assert csv_file.exists()
@@ -165,10 +166,11 @@ def test_cli_csv_file_output(shared_datadir, tmp_path):
 def test_cli_mermaid_file_output(shared_datadir, tmp_path):
     """Test that Mermaid file output works correctly."""
     basic_file = shared_datadir / "basic.py"
-    mermaid_file = tmp_path / "test.mmd"
+    output_dir = tmp_path / "output"
+    mermaid_file = output_dir / "test.mmd"
 
     runner = CliRunner()
-    result = runner.invoke(main, [str(basic_file), "--mermaid-file", str(mermaid_file)])
+    result = runner.invoke(main, [str(basic_file), "--output-dir", str(output_dir), "--mermaid-file", "test.mmd"])
 
     assert result.exit_code == 0
     assert mermaid_file.exists()
@@ -184,10 +186,11 @@ def test_cli_mermaid_file_output(shared_datadir, tmp_path):
 def test_cli_html_file_output(shared_datadir, tmp_path):
     """Test that HTML file output works correctly."""
     basic_file = shared_datadir / "basic.py"
-    html_file = tmp_path / "test.html"
+    output_dir = tmp_path / "output"
+    html_file = output_dir / "test.html"
 
     runner = CliRunner()
-    result = runner.invoke(main, [str(basic_file), "--html-file", str(html_file)])
+    result = runner.invoke(main, [str(basic_file), "--output-dir", str(output_dir), "--html-file", "test.html"])
 
     assert result.exit_code == 0
     assert html_file.exists()
@@ -199,7 +202,7 @@ def test_cli_html_file_output(shared_datadir, tmp_path):
     assert "<title>Drafter Site Analysis</title>" in content
     assert "water.css" in content  # CSS framework
     assert "mermaid" in content  # Mermaid library
-    assert "<table>" in content
+    assert "<table class='sortable'>" in content
     assert "<h2>Complexity Analysis</h2>" in content
     assert "<h2>Dataclass Attributes</h2>" in content
     assert "<h2>Class Diagram</h2>" in content
@@ -222,60 +225,69 @@ def test_cli_no_stdout(shared_datadir, tmp_path):
 def test_cli_disable_csv_output(shared_datadir, tmp_path):
     """Test that --no-csv prevents CSV file creation."""
     basic_file = shared_datadir / "basic.py"
-    csv_file = tmp_path / "analysis.csv"
+    output_dir = tmp_path / "output"
+    csv_file = output_dir / "analysis.csv"
 
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path):
-        result = runner.invoke(main, [str(basic_file), "--no-csv"])
+        result = runner.invoke(main, [str(basic_file), "--output-dir", str(output_dir), "--no-csv"])
 
     assert result.exit_code == 0
+    # Directory shouldn't be created if no files are written (other outputs might still create it)
     assert not csv_file.exists()
 
 
 def test_cli_disable_mermaid_output(shared_datadir, tmp_path):
     """Test that --no-mermaid prevents Mermaid file creation."""
     basic_file = shared_datadir / "basic.py"
-    mermaid_file = tmp_path / "analysis.mmd"
+    output_dir = tmp_path / "output"
+    mermaid_file = output_dir / "analysis.mmd"
 
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path):
-        result = runner.invoke(main, [str(basic_file), "--no-mermaid"])
+        result = runner.invoke(main, [str(basic_file), "--output-dir", str(output_dir), "--no-mermaid"])
 
     assert result.exit_code == 0
+    # Directory might be created if other outputs are written
     assert not mermaid_file.exists()
 
 
 def test_cli_disable_html_output(shared_datadir, tmp_path):
     """Test that --no-html prevents HTML file creation."""
     basic_file = shared_datadir / "basic.py"
-    html_file = tmp_path / "analysis.html"
+    output_dir = tmp_path / "output"
+    html_file = output_dir / "analysis.html"
 
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path):
-        result = runner.invoke(main, [str(basic_file), "--no-html"])
+        result = runner.invoke(main, [str(basic_file), "--output-dir", str(output_dir), "--no-html"])
 
     assert result.exit_code == 0
+    # Directory might be created if other outputs are written
     assert not html_file.exists()
 
 
 def test_cli_custom_filenames(shared_datadir, tmp_path):
     """Test that custom filenames work for all output types."""
     basic_file = shared_datadir / "basic.py"
-    csv_file = tmp_path / "custom.csv"
-    mermaid_file = tmp_path / "custom.mmd"
-    html_file = tmp_path / "custom.html"
+    output_dir = tmp_path / "output"
+    csv_file = output_dir / "custom.csv"
+    mermaid_file = output_dir / "custom.mmd"
+    html_file = output_dir / "custom.html"
 
     runner = CliRunner()
     result = runner.invoke(
         main,
         [
             str(basic_file),
+            "--output-dir",
+            str(output_dir),
             "--csv-file",
-            str(csv_file),
+            "custom.csv",
             "--mermaid-file",
-            str(mermaid_file),
+            "custom.mmd",
             "--html-file",
-            str(html_file),
+            "custom.html",
         ],
     )
 
@@ -294,6 +306,103 @@ def test_cli_default_files_created(shared_datadir, tmp_path):
         result = runner.invoke(main, [str(basic_file)])
 
         assert result.exit_code == 0
-        assert Path("analysis.csv").exists()
-        assert Path("analysis.mmd").exists()
-        assert Path("analysis.html").exists()
+        # Files should be created in the default dist directory
+        assert Path("dist/analysis.csv").exists()
+        assert Path("dist/analysis.mmd").exists()
+        assert Path("dist/analysis.html").exists()
+
+
+def test_cli_output_dir_default(shared_datadir, tmp_path):
+    """Test that the default output directory is './dist'."""
+    basic_file = shared_datadir / "basic.py"
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(main, [str(basic_file), "--no-stdout"])
+
+        assert result.exit_code == 0
+        assert Path("dist").is_dir()
+        assert Path("dist/analysis.csv").exists()
+        assert Path("dist/analysis.mmd").exists()
+        assert Path("dist/analysis.html").exists()
+
+
+def test_cli_output_dir_custom(shared_datadir, tmp_path):
+    """Test that custom output directory works."""
+    basic_file = shared_datadir / "basic.py"
+    output_dir = tmp_path / "my-output"
+
+    runner = CliRunner()
+    result = runner.invoke(main, [str(basic_file), "--output-dir", str(output_dir), "--no-stdout"])
+
+    assert result.exit_code == 0
+    assert output_dir.is_dir()
+    assert (output_dir / "analysis.csv").exists()
+    assert (output_dir / "analysis.mmd").exists()
+    assert (output_dir / "analysis.html").exists()
+
+
+def test_cli_output_dir_nested(shared_datadir, tmp_path):
+    """Test that nested output directories are created."""
+    basic_file = shared_datadir / "basic.py"
+    output_dir = tmp_path / "nested" / "output" / "dir"
+
+    runner = CliRunner()
+    result = runner.invoke(main, [str(basic_file), "--output-dir", str(output_dir), "--no-stdout"])
+
+    assert result.exit_code == 0
+    assert output_dir.is_dir()
+    assert (output_dir / "analysis.csv").exists()
+    assert (output_dir / "analysis.mmd").exists()
+    assert (output_dir / "analysis.html").exists()
+
+
+def test_cli_output_dir_with_custom_filenames(shared_datadir, tmp_path):
+    """Test output directory works with custom filenames."""
+    basic_file = shared_datadir / "basic.py"
+    output_dir = tmp_path / "results"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            str(basic_file),
+            "--output-dir", str(output_dir),
+            "--csv-file", "data.csv",
+            "--mermaid-file", "diagram.mmd",
+            "--html-file", "report.html",
+            "--no-stdout",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert output_dir.is_dir()
+    assert (output_dir / "data.csv").exists()
+    assert (output_dir / "diagram.mmd").exists()
+    assert (output_dir / "report.html").exists()
+    # Default names should not exist
+    assert not (output_dir / "analysis.csv").exists()
+    assert not (output_dir / "analysis.mmd").exists()
+    assert not (output_dir / "analysis.html").exists()
+
+
+def test_cli_no_output_dir_created_when_all_disabled(shared_datadir, tmp_path):
+    """Test that output directory is not created when all file outputs are disabled."""
+    basic_file = shared_datadir / "basic.py"
+    output_dir = tmp_path / "output"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            str(basic_file),
+            "--output-dir", str(output_dir),
+            "--no-csv",
+            "--no-mermaid",
+            "--no-html",
+        ],
+    )
+
+    assert result.exit_code == 0
+    # Output directory should not be created if no files are written
+    assert not output_dir.exists()

@@ -130,3 +130,8 @@ dmypy.json
 
 # templates
 .github/templates/*
+
+# analyze_drafter_site output files
+analysis.csv
+analysis.mmd
+analysis.html

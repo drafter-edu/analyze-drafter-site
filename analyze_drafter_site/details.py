@@ -550,6 +550,8 @@ class Analyzer(ast.NodeVisitor):
         Complexity scoring:
         - Primitives (int, str, bool, float): 0.1
         - Lists: 1
+        - Lists with nested structures
+          (list[list[...]] or list[Dataclass]): 10
         - Custom dataclasses: 1
         - Dicts, tuples, sets: 10
         - Any other: 100
@@ -563,6 +565,18 @@ class Analyzer(ast.NodeVisitor):
 
         # Check for lists
         if base_type == "list":
+            # Check if it's a nested structure
+            # (list[list[...]] or list[Dataclass])
+            if "[" in type_name:
+                # Extract the inner type from list[X]
+                inner_type = type_name[
+                    type_name.index("[") + 1 : type_name.rindex("]")  # noqa
+                ]  # E203 is a known conflict with Black's slice formatting
+                # Check if inner type is a nested structure
+                # (contains '[') or is a dataclass
+                inner_base = inner_type.split("[")[0].strip()
+                if "[" in inner_type or inner_base in self.dataclasses:
+                    return 10
             return 1
 
         # Check for custom dataclasses

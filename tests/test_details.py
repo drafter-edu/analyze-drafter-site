@@ -336,9 +336,9 @@ class B:
     complexity_a = analyzer._calculate_dataclass_complexity("A")
     assert complexity_a == 0.1
 
-    # B: 1 custom (A) = 1, 1 list = 1 => total=2
+    # B: 1 custom (A) = 1, 1 list[A] (nested) = 10 => total=11
     complexity_b = analyzer._calculate_dataclass_complexity("B")
-    assert complexity_b == 2.0
+    assert complexity_b == 11.0
 
 
 def test_unused_dataclass_detection():
@@ -552,15 +552,11 @@ def index(state: Used):
     warnings = analyzer.get_unused_warnings()
 
     # Check for unused dataclass warning
-    assert (
-        "WARNING: The following dataclasses are NOT used anywhere:" in warnings
-    )
+    assert "WARNING: The following dataclasses are NOT used anywhere:" in warnings
     assert "Unused" in warnings
 
     # Check for unused attribute warning
-    assert (
-        "WARNING: The following attributes are NOT used anywhere:" in warnings
-    )
+    assert "WARNING: The following attributes are NOT used anywhere:" in warnings
     assert "Used.field2" in warnings
     assert "Unused.data" in warnings
 
@@ -623,8 +619,8 @@ def test_csv_output_with_test_data(shared_datadir):
     assert "Dataclass,Complexity" in complexity_csv
     assert "A,0.2" in complexity_csv
     assert "C,0.2" in complexity_csv
-    assert "B,2.1" in complexity_csv
-    assert "TOTAL,2.5" in complexity_csv
+    assert "B,11.1" in complexity_csv
+    assert "TOTAL,11.5" in complexity_csv
 
     # Test warnings
     warnings = analyzer.get_unused_warnings()
@@ -940,3 +936,143 @@ def edit_todo(state: State, target_id: int) -> Page:
     diagram = analyzer.generate_mermaid_function_diagram()
     assert "make_todo_list --> remove_todo" in diagram
     assert "make_todo_list --> edit_todo" in diagram
+
+
+def test_nested_field_complexity_list_of_primitives():
+    """Test that list[int] remains score 1 (not nested)."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Test:
+    field: list[int]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    complexity = analyzer._calculate_dataclass_complexity("Test")
+    assert complexity == 1.0
+
+
+def test_nested_field_complexity_list_of_list():
+    """Test that list[list[int]] is scored as 10 (nested)."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Test:
+    field: list[list[int]]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    complexity = analyzer._calculate_dataclass_complexity("Test")
+    assert complexity == 10.0
+
+
+def test_nested_field_complexity_list_of_dataclass():
+    """Test that list[Dataclass] is scored as 10 (nested)."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Tile:
+    value: int
+
+@dataclass
+class Test:
+    field: list[Tile]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    complexity = analyzer._calculate_dataclass_complexity("Test")
+    assert complexity == 10.0
+
+
+def test_nested_field_complexity_plain_dataclass():
+    """Test that plain Dataclass field remains score 1."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Tile:
+    value: int
+
+@dataclass
+class Test:
+    field: Tile
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    complexity = analyzer._calculate_dataclass_complexity("Test")
+    assert complexity == 1.0
+
+
+def test_nested_field_complexity_triple_nested():
+    """Test that list[list[list[int]]] is scored as 10 (doesn't stack)."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Test:
+    field: list[list[list[int]]]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    complexity = analyzer._calculate_dataclass_complexity("Test")
+    assert complexity == 10.0
+
+
+def test_nested_field_complexity_dict_with_dataclass():
+    """Test that dict[str, Dataclass] remains score 10."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Tile:
+    value: int
+
+@dataclass
+class Test:
+    field: dict[str, Tile]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    complexity = analyzer._calculate_dataclass_complexity("Test")
+    assert complexity == 10.0
+
+
+def test_nested_field_complexity_mixed_fields():
+    """Test complexity with mixed nested and non-nested fields."""
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Item:
+    name: str
+
+@dataclass
+class Test:
+    simple_int: int
+    simple_list: list[int]
+    nested_list: list[list[int]]
+    dataclass_list: list[Item]
+    plain_dataclass: Item
+    simple_dict: dict[str, int]
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # simple_int: 0.1
+    # simple_list: 1
+    # nested_list: 10
+    # dataclass_list: 10
+    # plain_dataclass: 1
+    # simple_dict: 10
+    # Total: 0.1 + 1 + 10 + 10 + 1 + 10 = 32.1
+    complexity = analyzer._calculate_dataclass_complexity("Test")
+    assert complexity == 32.1

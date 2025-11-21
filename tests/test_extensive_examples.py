@@ -9,7 +9,7 @@ class TestGhostHunt:
 
     def test_ghost_hunt_dataclasses(self, shared_datadir):
         """Test that all dataclasses in ghost_hunt.py are detected."""
-        with open(shared_datadir / "ghost_hunt.py") as f:
+        with open(shared_datadir / "ghost_hunt.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -21,7 +21,7 @@ class TestGhostHunt:
 
     def test_ghost_hunt_tile_fields(self, shared_datadir):
         """Test that Tile dataclass fields are correctly detected."""
-        with open(shared_datadir / "ghost_hunt.py") as f:
+        with open(shared_datadir / "ghost_hunt.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -35,7 +35,7 @@ class TestGhostHunt:
 
     def test_ghost_hunt_state_fields(self, shared_datadir):
         """Test that State dataclass fields are correctly detected."""
-        with open(shared_datadir / "ghost_hunt.py") as f:
+        with open(shared_datadir / "ghost_hunt.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -50,7 +50,7 @@ class TestGhostHunt:
 
     def test_ghost_hunt_routes(self, shared_datadir):
         """Test that all routes in ghost_hunt.py are detected."""
-        with open(shared_datadir / "ghost_hunt.py") as f:
+        with open(shared_datadir / "ghost_hunt.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -65,7 +65,7 @@ class TestGhostHunt:
 
     def test_ghost_hunt_helper_functions(self, shared_datadir):
         """Test that helper functions are tracked."""
-        with open(shared_datadir / "ghost_hunt.py") as f:
+        with open(shared_datadir / "ghost_hunt.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -77,24 +77,24 @@ class TestGhostHunt:
 
     def test_ghost_hunt_route_flow(self, shared_datadir):
         """Test that route flow is correctly captured."""
-        with open(shared_datadir / "ghost_hunt.py") as f:
+        with open(shared_datadir / "ghost_hunt.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
 
         # index should call new_game (via Button)
         assert "new_game" in analyzer.function_calls.get("index", [])
-        
+
         # new_game should call play_game
         assert "play_game" in analyzer.function_calls.get("new_game", [])
-        
+
         # flip_tile should call either play_game or game_won
         flip_tile_calls = analyzer.function_calls.get("flip_tile", [])
         assert "play_game" in flip_tile_calls or "game_won" in flip_tile_calls
 
     def test_ghost_hunt_attribute_usage(self, shared_datadir):
         """Test that State attributes are tracked for usage."""
-        with open(shared_datadir / "ghost_hunt.py") as f:
+        with open(shared_datadir / "ghost_hunt.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -102,7 +102,7 @@ class TestGhostHunt:
         # State attributes should be used in routes
         assert "State" in analyzer.attribute_usage
         state_usage = analyzer.attribute_usage["State"]
-        
+
         # grid, score, and ghosts should be used
         assert state_usage.get("grid", 0) > 0
         assert state_usage.get("score", 0) > 0
@@ -110,36 +110,36 @@ class TestGhostHunt:
 
     def test_ghost_hunt_complexity(self, shared_datadir):
         """Test complexity calculation for ghost_hunt.py."""
-        with open(shared_datadir / "ghost_hunt.py") as f:
+        with open(shared_datadir / "ghost_hunt.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
 
         # State has complex list[list[Tile]] field
         state_complexity = analyzer._calculate_dataclass_complexity("State")
-        # grid: list[list[Tile]] (1 for list), seed: int (0.1), score: int (0.1), 
+        # grid: list[list[Tile]] (1 for list), seed: int (0.1), score: int (0.1),
         # size: int (0.1), ghosts: int (0.1)
         # Total should be > 1
         assert state_complexity > 1
 
     def test_ghost_hunt_mermaid_class_diagram(self, shared_datadir):
         """Test that class diagram shows relationships.
-        
+
         Note: This test currently fails because the analyzer doesn't detect
         nested subscripts like list[list[Tile]] as dependencies. This is a
         known limitation and the test correctly identifies this gap.
         """
-        with open(shared_datadir / "ghost_hunt.py") as f:
+        with open(shared_datadir / "ghost_hunt.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
 
         diagram = analyzer.generate_mermaid_class_diagram()
-        
+
         # Should contain both classes
         assert "class Tile" in diagram
         assert "class State" in diagram
-        
+
         # State should have dependency on Tile (via grid: list[list[Tile]])
         # This currently fails due to nested list not being parsed for dependencies
         # The test is correct - it exposes a limitation in the analyzer
@@ -147,20 +147,23 @@ class TestGhostHunt:
 
     def test_ghost_hunt_mermaid_function_diagram(self, shared_datadir):
         """Test that function diagram shows route relationships."""
-        with open(shared_datadir / "ghost_hunt.py") as f:
+        with open(shared_datadir / "ghost_hunt.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
 
         diagram = analyzer.generate_mermaid_function_diagram()
-        
+
         # Should contain route nodes
         assert "index" in diagram
         assert "new_game" in diagram
         assert "play_game" in diagram
-        
+
         # Should show relationships
-        assert "index --> new_game" in diagram or "new_game" in analyzer.function_calls.get("index", [])
+        assert (
+            "index --> new_game" in diagram
+            or "new_game" in analyzer.function_calls.get("index", [])
+        )
 
 
 class TestCommenter:
@@ -168,7 +171,7 @@ class TestCommenter:
 
     def test_commenter_dataclasses(self, shared_datadir):
         """Test that all dataclasses in commenter.py are detected."""
-        with open(shared_datadir / "commenter.py") as f:
+        with open(shared_datadir / "commenter.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -180,7 +183,7 @@ class TestCommenter:
 
     def test_commenter_line_fields(self, shared_datadir):
         """Test that Line dataclass fields are correctly detected."""
-        with open(shared_datadir / "commenter.py") as f:
+        with open(shared_datadir / "commenter.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -193,7 +196,7 @@ class TestCommenter:
 
     def test_commenter_state_fields(self, shared_datadir):
         """Test that State dataclass fields are correctly detected."""
-        with open(shared_datadir / "commenter.py") as f:
+        with open(shared_datadir / "commenter.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -205,7 +208,7 @@ class TestCommenter:
 
     def test_commenter_routes(self, shared_datadir):
         """Test that all routes in commenter.py are detected."""
-        with open(shared_datadir / "commenter.py") as f:
+        with open(shared_datadir / "commenter.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -221,7 +224,7 @@ class TestCommenter:
 
     def test_commenter_helper_functions(self, shared_datadir):
         """Test that helper functions are tracked."""
-        with open(shared_datadir / "commenter.py") as f:
+        with open(shared_datadir / "commenter.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -231,7 +234,7 @@ class TestCommenter:
 
     def test_commenter_route_flow(self, shared_datadir):
         """Test that route flow is correctly captured."""
-        with open(shared_datadir / "commenter.py") as f:
+        with open(shared_datadir / "commenter.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -239,17 +242,17 @@ class TestCommenter:
         # start_commenting should call page_commenter or error_page
         start_calls = analyzer.function_calls.get("start_commenting", [])
         assert "page_commenter" in start_calls or "error_page" in start_calls
-        
+
         # comment should be accessible from page_commenter (via Button)
         page_calls = analyzer.function_calls.get("page_commenter", [])
         assert "comment" in page_calls
-        
+
         # save_comment should call page_commenter
         assert "page_commenter" in analyzer.function_calls.get("save_comment", [])
 
     def test_commenter_attribute_usage(self, shared_datadir):
         """Test that attributes are tracked for usage."""
-        with open(shared_datadir / "commenter.py") as f:
+        with open(shared_datadir / "commenter.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -276,7 +279,7 @@ class TestProteinLookup:
 
     def test_protein_lookup_dataclasses(self, shared_datadir):
         """Test that all dataclasses in protein_lookup.py are detected."""
-        with open(shared_datadir / "protein_lookup.py") as f:
+        with open(shared_datadir / "protein_lookup.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -288,7 +291,7 @@ class TestProteinLookup:
 
     def test_protein_lookup_food_fields(self, shared_datadir):
         """Test that Food dataclass fields are correctly detected."""
-        with open(shared_datadir / "protein_lookup.py") as f:
+        with open(shared_datadir / "protein_lookup.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -302,7 +305,7 @@ class TestProteinLookup:
 
     def test_protein_lookup_state_fields(self, shared_datadir):
         """Test that State dataclass fields are correctly detected."""
-        with open(shared_datadir / "protein_lookup.py") as f:
+        with open(shared_datadir / "protein_lookup.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -313,7 +316,7 @@ class TestProteinLookup:
 
     def test_protein_lookup_routes(self, shared_datadir):
         """Test that all routes in protein_lookup.py are detected."""
-        with open(shared_datadir / "protein_lookup.py") as f:
+        with open(shared_datadir / "protein_lookup.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -326,7 +329,7 @@ class TestProteinLookup:
 
     def test_protein_lookup_helper_functions(self, shared_datadir):
         """Test that helper functions are tracked."""
-        with open(shared_datadir / "protein_lookup.py") as f:
+        with open(shared_datadir / "protein_lookup.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -335,28 +338,30 @@ class TestProteinLookup:
         index_calls = analyzer.function_calls.get("index", [])
         assert "get_food" in index_calls
         assert "total_protein" in index_calls
-        
+
         # search should call find_foods
         search_calls = analyzer.function_calls.get("search", [])
         assert "find_foods" in search_calls
-        assert "no_food_found_page" in search_calls or "make_food_button" in search_calls
+        assert (
+            "no_food_found_page" in search_calls or "make_food_button" in search_calls
+        )
 
     def test_protein_lookup_route_flow(self, shared_datadir):
         """Test that route flow is correctly captured."""
-        with open(shared_datadir / "protein_lookup.py") as f:
+        with open(shared_datadir / "protein_lookup.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
 
         # index should have Button to search
         assert "search" in analyzer.function_calls.get("index", [])
-        
+
         # add_food should call index
         assert "index" in analyzer.function_calls.get("add_food", [])
 
     def test_protein_lookup_attribute_usage(self, shared_datadir):
         """Test that attributes are tracked for usage."""
-        with open(shared_datadir / "protein_lookup.py") as f:
+        with open(shared_datadir / "protein_lookup.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -368,7 +373,7 @@ class TestProteinLookup:
 
     def test_protein_lookup_complexity(self, shared_datadir):
         """Test complexity calculation for protein_lookup.py."""
-        with open(shared_datadir / "protein_lookup.py") as f:
+        with open(shared_datadir / "protein_lookup.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -387,7 +392,7 @@ class TestTodo:
 
     def test_todo_dataclasses(self, shared_datadir):
         """Test that all dataclasses in todo.py are detected."""
-        with open(shared_datadir / "todo.py") as f:
+        with open(shared_datadir / "todo.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -399,7 +404,7 @@ class TestTodo:
 
     def test_todo_todoitem_fields(self, shared_datadir):
         """Test that TodoItem dataclass fields are correctly detected."""
-        with open(shared_datadir / "todo.py") as f:
+        with open(shared_datadir / "todo.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -414,7 +419,7 @@ class TestTodo:
 
     def test_todo_state_fields(self, shared_datadir):
         """Test that State dataclass fields are correctly detected."""
-        with open(shared_datadir / "todo.py") as f:
+        with open(shared_datadir / "todo.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -426,7 +431,7 @@ class TestTodo:
 
     def test_todo_routes(self, shared_datadir):
         """Test that all routes in todo.py are detected."""
-        with open(shared_datadir / "todo.py") as f:
+        with open(shared_datadir / "todo.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -443,42 +448,42 @@ class TestTodo:
 
     def test_todo_helper_functions(self, shared_datadir):
         """Test that helper functions are tracked."""
-        with open(shared_datadir / "todo.py") as f:
+        with open(shared_datadir / "todo.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
 
         # index should call make_todo_list
         assert "make_todo_list" in analyzer.function_calls.get("index", [])
-        
+
         # toggle_complete should call lookup_todo_item
         assert "lookup_todo_item" in analyzer.function_calls.get("toggle_complete", [])
 
     def test_todo_route_flow(self, shared_datadir):
         """Test that route flow is correctly captured."""
-        with open(shared_datadir / "todo.py") as f:
+        with open(shared_datadir / "todo.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
 
         # index should have Button to add_todo
         assert "add_todo" in analyzer.function_calls.get("index", [])
-        
+
         # save_changes should call index
         assert "index" in analyzer.function_calls.get("save_changes", [])
-        
+
         # save_new should call index
         assert "index" in analyzer.function_calls.get("save_new", [])
-        
+
         # toggle_complete should call index
         assert "index" in analyzer.function_calls.get("toggle_complete", [])
-        
+
         # remove_todo should call index
         assert "index" in analyzer.function_calls.get("remove_todo", [])
 
     def test_todo_attribute_usage(self, shared_datadir):
         """Test that attributes are tracked for usage."""
-        with open(shared_datadir / "todo.py") as f:
+        with open(shared_datadir / "todo.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -488,7 +493,7 @@ class TestTodo:
         state_usage = analyzer.attribute_usage["State"]
         assert state_usage.get("todos", 0) > 0
         assert state_usage.get("count", 0) > 0
-        
+
         # TodoItem attributes should be used
         assert "TodoItem" in analyzer.attribute_usage
         todoitem_usage = analyzer.attribute_usage["TodoItem"]
@@ -497,7 +502,7 @@ class TestTodo:
 
     def test_todo_complexity(self, shared_datadir):
         """Test complexity calculation for todo.py."""
-        with open(shared_datadir / "todo.py") as f:
+        with open(shared_datadir / "todo.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -513,7 +518,7 @@ class TestTodo:
 
     def test_todo_composition_relationship(self, shared_datadir):
         """Test that composition relationship is detected."""
-        with open(shared_datadir / "todo.py") as f:
+        with open(shared_datadir / "todo.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)
@@ -523,7 +528,7 @@ class TestTodo:
 
     def test_todo_mermaid_diagrams(self, shared_datadir):
         """Test that diagrams are generated correctly."""
-        with open(shared_datadir / "todo.py") as f:
+        with open(shared_datadir / "todo.py", encoding="utf-8") as f:
             code = f.read()
         analyzer = Analyzer()
         analyzer.analyze(code)

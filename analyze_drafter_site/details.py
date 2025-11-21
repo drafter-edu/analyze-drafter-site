@@ -650,11 +650,19 @@ class Analyzer(ast.NodeVisitor):
         output = []
         output.append("Dataclass,Attribute")
 
-        # Collect all unused attributes
+        # Collect all unused attributes with sorting
+        unused_fields = []
         for class_name, class_info in self.dataclasses.items():
             for field_name in class_info.fields.keys():
                 if self.attribute_usage[class_name][field_name] == 0:
-                    output.append(f"{class_name},{field_name}")
+                    unused_fields.append((class_name, field_name))
+
+        # Sort by class name, then by field name for deterministic output
+        unused_fields.sort()
+
+        # Add sorted unused fields to output
+        for class_name, field_name in unused_fields:
+            output.append(f"{class_name},{field_name}")
 
         # If only header exists, return empty string
         if len(output) == 1:

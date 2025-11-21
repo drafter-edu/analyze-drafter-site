@@ -164,22 +164,26 @@ def test_cli_csv_file_output(shared_datadir, tmp_path):
     
     # Verify unused fields CSV is included
     # basic.py has unused fields: C.xxx, C.yyy, B.field3, B.list_of_c
-    lines = content.split("\n")
+    # Split by double newlines to get separate CSV sections
+    sections = content.split("\n\n")
     
-    # Find the unused fields section (comes after complexity section)
-    # It should appear after the "TOTAL" line in complexity CSV
-    unused_section_start = None
-    found_total = False
-    for i, line in enumerate(lines):
-        if "TOTAL," in line:
-            found_total = True
-        elif found_total and line.strip() == "Dataclass,Attribute":
-            unused_section_start = i
-            break
+    # Find the unused fields section by looking for the specific header
+    unused_section = None
+    for section in sections:
+        if section.startswith("Dataclass,Attribute\n"):
+            # This could be either the attributes section or unused fields section
+            # Unused fields section only has 2 columns, attributes has 5
+            lines = section.split("\n")
+            if len(lines) > 1:
+                # Check the number of columns in the first data row
+                first_data_row = lines[1]
+                if first_data_row.count(",") == 1:  # 2 columns = unused fields
+                    unused_section = section
+                    break
     
-    assert unused_section_start is not None, "Unused fields section not found"
-    assert "C,xxx" in content
-    assert "B,field3" in content
+    assert unused_section is not None, "Unused fields section not found"
+    assert "C,xxx" in unused_section
+    assert "B,field3" in unused_section
 
 
 def test_cli_mermaid_file_output(shared_datadir, tmp_path):

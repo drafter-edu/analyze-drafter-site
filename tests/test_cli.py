@@ -165,10 +165,15 @@ def test_cli_csv_file_output(shared_datadir, tmp_path):
     # Verify unused fields CSV is included
     # basic.py has unused fields: C.xxx, C.yyy, B.field3, B.list_of_c
     lines = content.split("\n")
-    # Find the unused fields section
+    
+    # Find the unused fields section (comes after complexity section)
+    # It should appear after the "TOTAL" line in complexity CSV
     unused_section_start = None
+    found_total = False
     for i, line in enumerate(lines):
-        if line.strip() == "Dataclass,Attribute" and i > 10:  # Skip the attributes section
+        if "TOTAL," in line:
+            found_total = True
+        elif found_total and line.strip() == "Dataclass,Attribute":
             unused_section_start = i
             break
     

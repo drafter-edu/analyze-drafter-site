@@ -1134,8 +1134,8 @@ def index(state: State):
     assert "State,unused_field" in csv_output
     assert "State,another_unused" in csv_output
 
-    # Check used field is NOT present
-    assert "State,used_field" not in csv_output or "used_field" not in csv_output.split("\n")[1:]
+    # Check used field is NOT present in the output
+    assert "State,used_field" not in csv_output
 
 
 def test_unused_fields_csv_no_unused():

@@ -642,6 +642,26 @@ class Analyzer(ast.NodeVisitor):
 
         return "\n".join(output)
 
+    def get_unused_fields_csv(self):
+        """Generate CSV table of unused dataclass fields."""
+        if not self.dataclasses:
+            return ""
+
+        output = []
+        output.append("Dataclass,Attribute")
+
+        # Collect all unused attributes
+        for class_name, class_info in self.dataclasses.items():
+            for field_name in class_info.fields.keys():
+                if self.attribute_usage[class_name][field_name] == 0:
+                    output.append(f"{class_name},{field_name}")
+
+        # If only header exists, return empty string
+        if len(output) == 1:
+            return ""
+
+        return "\n".join(output)
+
     def get_unused_warnings(self):
         """Generate warnings about unused dataclasses and attributes."""
         if not self.dataclasses:

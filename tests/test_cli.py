@@ -161,6 +161,20 @@ def test_cli_csv_file_output(shared_datadir, tmp_path):
     assert "Dataclass,Complexity" in content
     assert "first_page" in content
     assert "A,field1,int" in content
+    
+    # Verify unused fields CSV is included
+    # basic.py has unused fields: C.xxx, C.yyy, B.field3, B.list_of_c
+    lines = content.split("\n")
+    # Find the unused fields section
+    unused_section_start = None
+    for i, line in enumerate(lines):
+        if line.strip() == "Dataclass,Attribute" and i > 10:  # Skip the attributes section
+            unused_section_start = i
+            break
+    
+    assert unused_section_start is not None, "Unused fields section not found"
+    assert "C,xxx" in content
+    assert "B,field3" in content
 
 
 def test_cli_mermaid_file_output(shared_datadir, tmp_path):
@@ -205,6 +219,7 @@ def test_cli_html_file_output(shared_datadir, tmp_path):
     assert "<table class='sortable'>" in content
     assert "<h2>Complexity Analysis</h2>" in content
     assert "<h2>Dataclass Attributes</h2>" in content
+    assert "<h2>Unused Fields</h2>" in content  # New section
     assert "<h2>Class Diagram</h2>" in content
     assert "<h2>Function Call Graph</h2>" in content
 

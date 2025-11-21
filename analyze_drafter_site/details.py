@@ -228,6 +228,9 @@ class Analyzer(ast.NodeVisitor):
                         target.value, str
                     ):
                         target_name = target.value
+                        # Strip leading "/" from URLs
+                        if target_name.startswith("/"):
+                            target_name = target_name[1:]
 
                     if (
                         target_name

@@ -122,6 +122,29 @@ def target_page(state):
     assert "target_page" in analyzer.function_calls["index"]
 
 
+def test_route_button_links_with_leading_slash():
+    """Test that Button links with leading slash in URLs are captured."""
+    code = """
+from drafter import *
+
+@route
+def index(state):
+    return Page(state, [Button('Link', '/link')])
+
+@route
+def link(state):
+    return Page(state, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    # Check that leading slash URLs are tracked correctly
+    assert "link" in analyzer.function_calls["index"]
+
+    diagram = analyzer.generate_mermaid_function_diagram()
+    assert "index --> link" in diagram
+
+
 def test_route_direct_calls():
     """Test that direct route function calls are captured."""
     code = """
@@ -552,11 +575,15 @@ def index(state: Used):
     warnings = analyzer.get_unused_warnings()
 
     # Check for unused dataclass warning
-    assert "WARNING: The following dataclasses are NOT used anywhere:" in warnings
+    assert (
+        "WARNING: The following dataclasses are NOT used anywhere:" in warnings
+    )
     assert "Unused" in warnings
 
     # Check for unused attribute warning
-    assert "WARNING: The following attributes are NOT used anywhere:" in warnings
+    assert (
+        "WARNING: The following attributes are NOT used anywhere:" in warnings
+    )
     assert "Used.field2" in warnings
     assert "Unused.data" in warnings
 

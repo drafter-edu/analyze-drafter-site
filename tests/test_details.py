@@ -1103,3 +1103,149 @@ class Test:
     # Total: 0.1 + 1 + 10 + 10 + 1 + 10 = 32.1
     complexity = analyzer._calculate_dataclass_complexity("Test")
     assert complexity == 32.1
+
+
+def test_unused_fields_csv_basic():
+    """Test that unused fields CSV is properly formatted."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class State:
+    used_field: int
+    unused_field: str
+    another_unused: bool
+
+@route
+def index(state: State):
+    state.used_field += 1
+    return Page(state, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    csv_output = analyzer.get_unused_fields_csv()
+
+    # Check CSV header
+    assert "Dataclass,Attribute" in csv_output
+
+    # Check unused fields are present
+    assert "State,unused_field" in csv_output
+    assert "State,another_unused" in csv_output
+
+    # Check used field is NOT present in the output
+    assert "State,used_field" not in csv_output
+
+
+def test_unused_fields_csv_no_unused():
+    """Test that unused fields CSV returns empty string when all fields are used."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class State:
+    x: int
+    y: str
+
+@route
+def index(state: State):
+    state.x += 1
+    state.y = "hello"
+    return Page(state, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    csv_output = analyzer.get_unused_fields_csv()
+
+    # Should return empty string when no unused fields
+    assert csv_output == ""
+
+
+def test_unused_fields_csv_multiple_classes():
+    """Test unused fields CSV with multiple dataclasses."""
+    code = """
+from dataclasses import dataclass
+from drafter import *
+
+@dataclass
+class A:
+    used: int
+    unused: str
+
+@dataclass
+class B:
+    all_unused: bool
+    also_unused: float
+
+@dataclass
+class C:
+    all_used: int
+
+@route
+def index(a: A, c: C):
+    a.used += 1
+    c.all_used = 5
+    return Page(a, [])
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    csv_output = analyzer.get_unused_fields_csv()
+
+    # Check header
+    assert "Dataclass,Attribute" in csv_output
+
+    # Check unused fields from A
+    assert "A,unused" in csv_output
+
+    # Check unused fields from B (completely unused class)
+    assert "B,all_unused" in csv_output
+    assert "B,also_unused" in csv_output
+
+    # Check C has no unused fields in the output
+    lines = csv_output.split("\n")
+    c_lines = [line for line in lines if line.startswith("C,")]
+    assert len(c_lines) == 0
+
+
+def test_unused_fields_csv_no_dataclasses():
+    """Test that unused fields CSV returns empty string when there are no dataclasses."""
+    code = """
+def helper():
+    return 42
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    csv_output = analyzer.get_unused_fields_csv()
+    assert csv_output == ""
+
+
+def test_unused_fields_csv_parseable():
+    """Test that unused fields CSV can be parsed by csv module."""
+    import csv
+    import io
+
+    code = """
+from dataclasses import dataclass
+
+@dataclass
+class Test:
+    unused1: int
+    unused2: str
+"""
+    analyzer = Analyzer()
+    analyzer.analyze(code)
+
+    csv_output = analyzer.get_unused_fields_csv()
+    reader = csv.DictReader(io.StringIO(csv_output))
+    rows = list(reader)
+
+    assert len(rows) == 2
+    assert rows[0]["Dataclass"] == "Test"
+    assert rows[0]["Attribute"] == "unused1"
+    assert rows[1]["Dataclass"] == "Test"
+    assert rows[1]["Attribute"] == "unused2"

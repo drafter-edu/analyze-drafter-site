@@ -37,7 +37,10 @@ def generate_all_csv(complexity_by_section, analyzer):
         generate_complexity_csv(complexity_by_section),
         analyzer.get_dataclass_attribute_csv(),
         analyzer.get_dataclass_complexity_csv(),
+        analyzer.get_unused_fields_csv(),
     ]
+    # Filter out empty parts
+    parts = [part for part in parts if part]
     return "\n\n".join(parts)
 
 
@@ -138,6 +141,12 @@ def generate_html_output(complexity_by_section, analyzer):
     # Generate complexity scores table with proper escaping
     complexity_csv = analyzer.get_dataclass_complexity_csv()
     html_parts.append(csv_to_html_table(complexity_csv))
+
+    # Add unused fields table if any exist
+    unused_csv = analyzer.get_unused_fields_csv()
+    if unused_csv:
+        html_parts.extend(["", "    <h2>Unused Fields</h2>"])
+        html_parts.append(csv_to_html_table(unused_csv))
 
     # Add warnings if present with escaping
     warnings = analyzer.get_unused_warnings()
@@ -250,22 +259,28 @@ def main(path, output_dir, csv, csv_file, mermaid, mermaid_file, html, html_file
 
         print("-" * 80)
 
+        # 4. Unused fields (CSV)
+        unused_csv = analyzer.get_unused_fields_csv()
+        if unused_csv:
+            print(unused_csv)
+            print("-" * 80)
+
         # ===== TEXTUAL RESULTS SECTION =====
 
-        # 4. Warnings about unused dataclasses/attributes
+        # 5. Warnings about unused dataclasses/attributes
         warnings = analyzer.get_unused_warnings()
         if warnings:
             print(warnings)
             print("-" * 80)
 
-        # 5. Other textual details (Routes, Dataclasses list)
+        # 6. Other textual details (Routes, Dataclasses list)
         print(analyzer.get_textual_details())
 
         print("-" * 80)
 
         # ===== DIAGRAMS SECTION =====
 
-        # 6. Mermaid diagrams
+        # 7. Mermaid diagrams
         print(analyzer.generate_mermaid_class_diagram())
         print()
         print(analyzer.generate_mermaid_function_diagram())
